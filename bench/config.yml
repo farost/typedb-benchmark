@@ -1,0 +1,102 @@
+# TPC-C benchmark suite — central configuration.
+#
+# Everything that varies between runs (commits, TPC-C scale, durations,
+# workspace path) lives here. The orchestrator (`bench/run.sh`) reads
+# this file. Override via `--config <path>` to keep variants side by side.
+#
+# A single typedb-driver version is shared across all modes — the point of
+# the suite is to compare *server* code paths under an identical client.
+
+driver:
+  # Pick one of three sources for the typedb-driver. They're tried in priority
+  # order: local_wheel > local_repo > version. The orchestrator picks the
+  # first that's set.
+  #
+  # `version` — pip install from PyPI (with optional extra index for snapshots).
+  # `local_wheel` — absolute path to a pre-built .whl on disk.
+  #     Example: "/home/me/work/typedb-driver/bazel-bin/python/assemble-pip39.dist/typedb_driver-...whl"
+  # `local_repo` — absolute path to a typedb-driver checkout. The orchestrator
+  #     builds `//python:assemble-pip<N>` against the current python version
+  #     and pip-installs the resulting wheel.
+  version: "3.11.5"
+  extra_index_url: "https://repo.typedb.com/public/public-snapshot/python/simple/"
+  local_wheel: ""
+  local_repo: ""
+
+# Where repos get cloned and binaries extracted. Persisted across runs so
+# unchanged commits don't re-clone. `${HOME}` is expanded by the orchestrator.
+workspace: "${HOME}/typedb-bench-work"
+
+# Smoke phase: quick verification each mode starts and can serve a few
+# transactions. Runs before every benchmark phase. If any smoke fails the
+# bench phase is skipped.
+smoke:
+  warehouses: 1
+  scalefactor: 200      # 15 customers/district — tiny dataset
+  clients: 1
+  duration_seconds: 15
+
+# Full benchmark phase. Tuned for "serious but not hours":
+#   load takes ~3-10 min per mode (cluster modes slower due to replication),
+#   execute is exactly `duration_seconds`, total per mode ~10-15 min.
+#   Whole pipeline (4 modes) lands at ~50-70 min on a moderate GCP VM.
+benchmark:
+  warehouses: 4
+  scalefactor: 10       # 300 customers/district, 4 warehouses -> ~1200 customers, ~12k order lines
+  clients: 4            # 1 client per warehouse (the TPC-C convention)
+  duration_seconds: 300 # 5 minutes — enough samples per workload (5 txn types)
+
+# Modes to exercise. Order is preserved in both smoke and bench phases.
+# Each mode pins its own commit so you can compare apples-to-apples across
+# server versions without rebuilding the harness.
+#
+# Each mode picks its server *source* in priority order:
+#   local_archive > local_repo > (repo_url + commit)
+#
+# `local_archive` — absolute path to an already-built all-archive
+#     (typedb-all-linux-arm64.tar.gz or typedb-cluster-all-linux-arm64.tar.gz).
+#     The orchestrator extracts it and skips build entirely. Use this to
+#     test a branch / WIP commit that exists only in your local bazel-bin.
+# `local_repo` — absolute path to a checked-out repo. The orchestrator runs
+#     `bazel build //:assemble-all-<arch>-targz` in place, then extracts.
+#     Use this to test uncommitted changes (the bazel build picks up your
+#     working tree).
+# `repo_url + commit` — clone the remote at the pinned commit, build there.
+#     This is the "reproducible" path: works on a fresh GCP VM with just
+#     a $GITHUB_TOKEN.
+modes:
+  - name: typedb-core
+    description: "Plain typedb (Core, single node) — baseline"
+    repo_url:    "git@github.com:farost/typedb.git"
+    commit:      "fa8155577b6be24d4b41c751cd482b9fb1e8adc7"  # farost/typedb master tip
+    local_archive: ""
+    local_repo:    ""
+    server_type: typedb
+    nodes:       1
+
+  - name: cluster-master-1n
+    description: "typedb-cluster master, 1 node — single-replica overhead"
+    repo_url:    "git@github.com:farost/typedb-cluster.git"
+    commit:      "5f8c44199be4cf791ef9fd25a810d138ac57650e"  # farost/typedb-cluster master tip
+    local_archive: ""
+    local_repo:    ""
+    server_type: typedb-cluster
+    nodes:       1
+
+  - name: cluster-feature-1n
+    description: "cluster-support-feature-branch, 1 node — feature branch single-replica"
+    repo_url:    "git@github.com:farost/typedb-cluster.git"
+    commit:      "99268086992fa46aef515268122b3ca9f45277a7"  # farost/cluster-support-feature-branch tip
+    local_archive: ""
+    local_repo:    ""
+    server_type: typedb-cluster
+    nodes:       1
+
+  - name: cluster-feature-3n
+    description: "cluster-support-feature-branch, 3 nodes — full cluster"
+    repo_url:    "git@github.com:farost/typedb-cluster.git"
+    commit:      "99268086992fa46aef515268122b3ca9f45277a7"  # same as cluster-feature-1n
+    local_archive: ""
+    local_repo:    ""
+    server_type: typedb-cluster
+    nodes:       3
