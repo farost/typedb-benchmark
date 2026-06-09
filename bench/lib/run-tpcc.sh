@@ -39,11 +39,16 @@ case "$nodes" in
     *) edition="Cluster" ;;
 esac
 
-# Pull tpcc params for the requested phase.
-warehouses="$(config_get "${phase}.warehouses")"
-scalefactor="$(config_get "${phase}.scalefactor")"
-clients="$(config_get "${phase}.clients")"
-duration="$(config_get "${phase}.duration_seconds")"
+# Pull tpcc params for the requested phase. The phase name `bench` is the
+# CLI/directory label; the config section for the full run is `benchmark`.
+case "$phase" in
+    bench)  section=benchmark ;;
+    *)      section="$phase" ;;
+esac
+warehouses="$(config_get "${section}.warehouses")"
+scalefactor="$(config_get "${section}.scalefactor")"
+clients="$(config_get "${section}.clients")"
+duration="$(config_get "${section}.duration_seconds")"
 
 # Use a per-mode database name so reruns against the same server (smoke-then-
 # bench is common) don't bleed into each other.
