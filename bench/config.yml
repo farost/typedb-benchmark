@@ -27,6 +27,20 @@ driver:
 # unchanged commits don't re-clone. `${HOME}` is expanded by the orchestrator.
 workspace: "${HOME}/typedb-bench-work"
 
+# Per-mode pre-loaded database fixtures. After a successful bench load the
+# orchestrator snapshots each node's `server/{data,clustering}` dirs into
+# `${cache_dir}/<key>/{1,2,…}.tar.gz`, keyed by binary checksum + W + SF +
+# schema hash. Subsequent runs with matching key restore the snapshot and
+# skip load entirely (load is preparation, not measurement — execute is the
+# only thing that contributes to tpmC).
+#
+# The cache invalidates automatically whenever any input changes (binary,
+# tpcc params, schema). Disable per-run with `bench/run.sh --no-fixtures`,
+# or globally with `enabled: false`. Wipe with `rm -rf <cache_dir>`.
+fixtures:
+  enabled: true
+  cache_dir: ""    # empty → defaults to ${workspace}/fixtures
+
 # Smoke phase: quick verification each mode starts and can serve a few
 # transactions. Runs before every benchmark phase. If any smoke fails the
 # bench phase is skipped.

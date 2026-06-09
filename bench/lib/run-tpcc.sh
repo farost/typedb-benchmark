@@ -1,19 +1,28 @@
 #!/usr/bin/env bash
 # Run tpcc against an already-running mode.
 #
-# Usage: run-tpcc.sh <phase> <mode_name> <addrs> <out_dir>
+# Usage: run-tpcc.sh [--load-only|--execute-only] <phase> <mode_name> <addrs> <out_dir>
+#
+#   --load-only:    only --reset --no-execute (populate). For the fixture flow.
+#   --execute-only: only --no-load --duration. Use after a restored fixture.
+#   (default):      both, the original flow.
 #
 #   phase:    "smoke" or "bench"
 #   mode_name: from config.yml
 #   addrs:    comma-separated host:port list (output of start-server.sh)
 #   out_dir:  per-mode results dir; load.log, execute.log, result.json land here
 #
-# Reads tpcc params from config (smoke.* vs benchmark.*), invokes tpcc.py
-# in two phases (load with --reset --no-execute, then execute --no-load),
+# Reads tpcc params from config (smoke.* vs benchmark.*), invokes tpcc.py,
 # parses the final summary into result.json.
 
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
+step_mode="both"
+case "${1:-}" in
+    --load-only)    step_mode="load";    shift ;;
+    --execute-only) step_mode="execute"; shift ;;
+esac
 
 phase="$1"
 mode_name="$2"
@@ -78,21 +87,25 @@ fi
 
 cd "$REPO_ROOT/tpcc/pytpcc"
 
-step "[$phase/$mode_name] LOAD  W=$warehouses SF=$scalefactor C=$clients addr=$addrs"
-"$PY" tpcc.py --config="$cfg" \
-    --warehouses="$warehouses" --scalefactor="$scalefactor" \
-    --clients="$clients" --reset --no-execute typedb3 \
-    > "$out_dir/load.log" 2>&1
-log "  load done"
+if [ "$step_mode" != "execute" ]; then
+    step "[$phase/$mode_name] LOAD  W=$warehouses SF=$scalefactor C=$clients addr=$addrs"
+    "$PY" tpcc.py --config="$cfg" \
+        --warehouses="$warehouses" --scalefactor="$scalefactor" \
+        --clients="$clients" --reset --no-execute typedb3 \
+        > "$out_dir/load.log" 2>&1
+    log "  load done"
+fi
 
-step "[$phase/$mode_name] EXEC  duration=${duration}s"
-"$PY" tpcc.py --config="$cfg" \
-    --warehouses="$warehouses" --scalefactor="$scalefactor" \
-    --clients="$clients" --no-load --duration="$duration" typedb3 \
-    > "$out_dir/execute.log" 2>&1
-log "  execute done"
+if [ "$step_mode" != "load" ]; then
+    step "[$phase/$mode_name] EXEC  duration=${duration}s"
+    "$PY" tpcc.py --config="$cfg" \
+        --warehouses="$warehouses" --scalefactor="$scalefactor" \
+        --clients="$clients" --no-load --duration="$duration" typedb3 \
+        > "$out_dir/execute.log" 2>&1
+    log "  execute done"
 
-# tpcc.py prints a Python dict literal at the end of execute. Extract it into
-# JSON so downstream comparison code doesn't have to re-parse human output.
-"$PY" "$LIB_DIR/parse-result.py" "$out_dir/execute.log" > "$out_dir/result.json"
-log "  result.json written"
+    # tpcc.py prints a Python dict literal at the end of execute. Extract it into
+    # JSON so downstream comparison code doesn't have to re-parse human output.
+    "$PY" "$LIB_DIR/parse-result.py" "$out_dir/execute.log" > "$out_dir/result.json"
+    log "  result.json written"
+fi

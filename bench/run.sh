@@ -37,6 +37,7 @@ while [ $# -gt 0 ]; do
         --smoke-only) DO_BENCH=0; shift ;;
         --skip-smoke) DO_SMOKE=0; shift ;;
         --skip-setup) DO_SETUP=0; shift ;;
+        --no-fixtures) export BENCH_NO_FIXTURES=1; shift ;;
         -h|--help)
             sed -n '2,/^set/p' "$0" | sed 's/^# \?//' | head -n -1
             exit 0 ;;
@@ -45,6 +46,7 @@ while [ $# -gt 0 ]; do
 done
 
 source "$BENCH_DIR/lib/common.sh"
+source "$BENCH_DIR/lib/fixtures.sh"
 
 # --- Discover modes ----------------------------------------------------------
 
@@ -183,12 +185,55 @@ run_phase() {
     local subdir="$run_dir/$phase"
     local pass=()
     local fail=()
+
+    # Fixtures are only meaningful for the bench phase. Smoke is fast and
+    # exercises the honest load path on every run, which is what we want.
+    local use_fixtures=false
+    if [ "$phase" = "bench" ] && [ -z "${BENCH_NO_FIXTURES:-}" ]; then
+        local cfg_enabled; cfg_enabled="$(config_get_optional fixtures.enabled)"
+        # default: enabled when the section exists and isn't explicitly false
+        if [ "$cfg_enabled" != "false" ]; then
+            use_fixtures=true
+        fi
+    fi
+
     for mode in "${selected_modes[@]}"; do
         step "$phase :: $mode"
         local mode_dir="$subdir/$mode"
         mkdir -p "$mode_dir"
         local mode_run="$workspace/run/${run_id}-${phase}-${mode}"
         rm -rf "$mode_run"; mkdir -p "$mode_run"
+
+        # Per-mode metadata + fixture key.
+        local mode_line; mode_line="$(mode_get "$mode")"
+        local mode_nodes; mode_nodes="$(awk -F'|' '{print $5}' <<<"$mode_line")"
+        local key="" launcher=""
+        local extract_path_file="$workspace/extracts/${mode}.path"
+        if [ -f "$extract_path_file" ]; then
+            launcher="$(cat "$extract_path_file")/typedb"
+        fi
+        if [ "$use_fixtures" = "true" ] && [ -x "$launcher" ]; then
+            local w sf
+            w="$(config_get benchmark.warehouses)"
+            sf="$(config_get benchmark.scalefactor)"
+            key="$(fixture_key "$mode" "$launcher" "$w" "$sf")"
+        fi
+
+        # Attempt fixture restore.
+        local restored=false
+        if [ -n "$key" ] && fixture_exists "$key" "$mode_nodes"; then
+            log "Fixture hit: $key"
+            if fixture_restore "$key" "$mode_run" "$mode_nodes"; then
+                restored=true
+            else
+                error "fixture_restore failed; falling back to honest load"
+                rm -rf "$mode_run"; mkdir -p "$mode_run"
+            fi
+        elif [ -n "$key" ]; then
+            log "Fixture miss: $key (will load and save)"
+        fi
+
+        # Start servers.
         local addrs
         if ! addrs="$(bash "$BENCH_DIR/lib/start-server.sh" "$mode" "$mode_run" 2>"$mode_dir/server-start.log")"; then
             error "[$phase/$mode] server failed to start; see $mode_dir/server-start.log"
@@ -196,7 +241,34 @@ run_phase() {
             bash "$BENCH_DIR/lib/stop-server.sh" >/dev/null 2>&1 || true
             continue
         fi
-        if bash "$BENCH_DIR/lib/run-tpcc.sh" "$phase" "$mode" "$addrs" "$mode_dir"; then
+
+        # Drive tpcc.
+        local tpcc_ok=true
+        if [ "$restored" = "true" ]; then
+            # Execute against the restored database, no load.
+            bash "$BENCH_DIR/lib/run-tpcc.sh" --execute-only "$phase" "$mode" "$addrs" "$mode_dir" || tpcc_ok=false
+        elif [ -n "$key" ]; then
+            # Fresh load → stop → snapshot → restart → execute.
+            if bash "$BENCH_DIR/lib/run-tpcc.sh" --load-only "$phase" "$mode" "$addrs" "$mode_dir"; then
+                bash "$BENCH_DIR/lib/stop-server.sh" >/dev/null 2>&1 || true
+                if ! fixture_save "$key" "$mode_run" "$mode_nodes"; then
+                    warn "fixture_save failed — continuing without cache"
+                fi
+                if ! addrs="$(bash "$BENCH_DIR/lib/start-server.sh" "$mode" "$mode_run" 2>>"$mode_dir/server-start.log")"; then
+                    error "[$phase/$mode] restart after load failed"
+                    tpcc_ok=false
+                else
+                    bash "$BENCH_DIR/lib/run-tpcc.sh" --execute-only "$phase" "$mode" "$addrs" "$mode_dir" || tpcc_ok=false
+                fi
+            else
+                tpcc_ok=false
+            fi
+        else
+            # No fixtures: original combined load + execute call.
+            bash "$BENCH_DIR/lib/run-tpcc.sh" "$phase" "$mode" "$addrs" "$mode_dir" || tpcc_ok=false
+        fi
+
+        if [ "$tpcc_ok" = "true" ]; then
             pass+=("$mode")
         else
             error "[$phase/$mode] tpcc failed; see $mode_dir/load.log / execute.log"

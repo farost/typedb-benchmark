@@ -42,6 +42,16 @@ kill_servers
 mkdir -p "$run_dir"
 addrs=()
 
+# Detect a fixture-restored run: if node 1's data dir is already populated,
+# the cluster topology is encoded in its raft log and we should skip the
+# `servers register` dance — the nodes will self-form from their persistent
+# state when started.
+restored_from_fixture=false
+if [ -d "$run_dir/1/server/data" ] && [ -n "$(ls -A "$run_dir/1/server/data" 2>/dev/null)" ]; then
+    restored_from_fixture=true
+    log "Detected pre-populated data — treating as fixture restore (skipping peer registration)"
+fi
+
 # typedb-cluster needs --server.clustering.{id,address} on every invocation.
 # typedb (Core) doesn't accept those flags. Branch on server_type.
 start_node() {
@@ -146,24 +156,28 @@ if [ "$nodes" -gt 1 ]; then
         return 1
     fi
 
-    log "Registering ${nodes} replicas with node 1..."
-    # `servers status` (read) responds before `servers register` (write) does,
-    # because writes need a raft commit. Retry on `[ADM2] Unavailable`.
-    for n in $(seq 2 "$nodes"); do
-        reg_deadline=$(( $(date +%s) + 30 ))
-        while :; do
-            out="$("$launcher" admin --socket-path="$local_sock" \
-                    --command "servers register $n 127.0.0.1:$(clustering_port "$n")" 2>&1 || true)"
-            if [[ "$out" != *ADM2* && "$out" != *Unavailable* ]]; then
-                break
-            fi
-            if [ "$(date +%s)" -ge "$reg_deadline" ]; then
-                error "register $n failed after 30s: $out"
-                return 1
-            fi
-            sleep 1
+    if [ "$restored_from_fixture" = "true" ]; then
+        log "Skipping peer registration (restored from fixture — raft state preserved)"
+    else
+        log "Registering ${nodes} replicas with node 1..."
+        # `servers status` (read) responds before `servers register` (write) does,
+        # because writes need a raft commit. Retry on `[ADM2] Unavailable`.
+        for n in $(seq 2 "$nodes"); do
+            reg_deadline=$(( $(date +%s) + 30 ))
+            while :; do
+                out="$("$launcher" admin --socket-path="$local_sock" \
+                        --command "servers register $n 127.0.0.1:$(clustering_port "$n")" 2>&1 || true)"
+                if [[ "$out" != *ADM2* && "$out" != *Unavailable* ]]; then
+                    break
+                fi
+                if [ "$(date +%s)" -ge "$reg_deadline" ]; then
+                    error "register $n failed after 30s: $out"
+                    return 1
+                fi
+                sleep 1
+            done
         done
-    done
+    fi
 
     # Spin until `servers status` shows a primary. Quick poll because raft
     # election in a freshly-formed local cluster usually completes in <2s.
@@ -203,6 +217,9 @@ addrs = os.environ["ADDR_CSV"].split(",")
 target = addrs[0] if len(addrs) == 1 else addrs
 d = TypeDB.driver(target, Credentials("admin", "password"),
                   DriverOptions(DriverTlsConfig.disabled()))
+# Force a primary lookup — gRPC bind alone doesn't mean raft has elected a
+# leader (`[CXN37] Could not find a primary server`).
+d.databases.contains("__healthcheck__")
 d.close()
 PYEOF
         then
@@ -219,6 +236,9 @@ addrs = os.environ["ADDR_CSV"].split(",")
 target = addrs[0] if len(addrs) == 1 else addrs
 d = TypeDB.driver(target, Credentials("admin", "password"),
                   DriverOptions(DriverTlsConfig.disabled()))
+# Force a primary lookup — gRPC bind alone doesn't mean raft has elected a
+# leader (`[CXN37] Could not find a primary server`).
+d.databases.contains("__healthcheck__")
 d.close()
 PYEOF
     then
