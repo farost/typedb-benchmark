@@ -27,6 +27,15 @@ driver:
 # unchanged commits don't re-clone. `${HOME}` is expanded by the orchestrator.
 workspace: "${HOME}/typedb-bench-work"
 
+# Random seed for pytpcc. Setting this makes the complete benchmark
+# (load + execute) deterministic — bit-identical workloads across modes
+# within one bench session and across reruns. Each mode's tpmC delta
+# then reflects only server-code-path differences, not random query-mix
+# variance. Empty string → fresh random seed each run (you sample more
+# of the workload distribution but lose run-to-run reproducibility).
+# The seed is part of the fixtures cache key, so changing it invalidates.
+seed: 42
+
 # Per-mode pre-loaded database fixtures. After a successful bench load the
 # orchestrator snapshots each node's `server/{data,clustering}` dirs into
 # `${cache_dir}/<key>/{1,2,…}.tar.gz`, keyed by binary checksum + W + SF +

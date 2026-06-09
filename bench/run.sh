@@ -213,10 +213,11 @@ run_phase() {
             launcher="$(cat "$extract_path_file")/typedb"
         fi
         if [ "$use_fixtures" = "true" ] && [ -x "$launcher" ]; then
-            local w sf
+            local w sf seed
             w="$(config_get benchmark.warehouses)"
             sf="$(config_get benchmark.scalefactor)"
-            key="$(fixture_key "$mode" "$launcher" "$w" "$sf")"
+            seed="$(config_get_optional seed)"
+            key="$(fixture_key "$mode" "$launcher" "$w" "$sf" "$seed")"
         fi
 
         # Attempt fixture restore.

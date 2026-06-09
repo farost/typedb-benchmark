@@ -27,10 +27,14 @@ if [ -z "${BENCH_COMMON_SH_LOADED:-}" ]; then
     source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 fi
 
-# Compute the cache key for a (mode, binary, params) tuple.
-# Usage: fixture_key <mode_name> <launcher_path> <warehouses> <scalefactor>
+# Compute the cache key for a (mode, binary, params, seed) tuple.
+# Usage: fixture_key <mode_name> <launcher_path> <warehouses> <scalefactor> <seed>
+#
+# `seed` should be the pytpcc --seed value, or empty for non-deterministic.
+# When empty we tag with `rand` — two seedless runs still share a fixture
+# (skip-load win), but the loaded data isn't tied to any particular seed.
 fixture_key() {
-    local mode_name="$1" launcher="$2" warehouses="$3" scalefactor="$4"
+    local mode_name="$1" launcher="$2" warehouses="$3" scalefactor="$4" seed="$5"
     local schema="$REPO_ROOT/tpcc/pytpcc/drivers/tql3/tpcc-schema.tql"
 
     local launcher_sha schema_sha
@@ -41,7 +45,8 @@ fixture_key() {
         error "fixture_key: couldn't hash launcher ($launcher) or schema ($schema)"
         return 1
     fi
-    echo "${mode_name}__${launcher_sha}__W${warehouses}_SF${scalefactor}__sch${schema_sha}"
+    local seed_tag="${seed:-rand}"
+    echo "${mode_name}__${launcher_sha}__W${warehouses}_SF${scalefactor}_S${seed_tag}__sch${schema_sha}"
 }
 
 # Resolve the fixture root directory (config override → workspace/fixtures).

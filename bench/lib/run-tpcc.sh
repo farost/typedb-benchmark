@@ -59,6 +59,14 @@ scalefactor="$(config_get "${section}.scalefactor")"
 clients="$(config_get "${section}.clients")"
 duration="$(config_get "${section}.duration_seconds")"
 
+# Optional --seed pin: makes load data + query stream deterministic so two
+# modes run bit-identical workloads. Empty → pytpcc picks a fresh seed.
+seed="$(config_get_optional seed)"
+seed_args=()
+if [ -n "$seed" ]; then
+    seed_args=(--seed="$seed")
+fi
+
 # Use a per-mode database name so reruns against the same server (smoke-then-
 # bench is common) don't bleed into each other.
 db_name="tpcc_${mode_name//-/_}_${phase}"
@@ -88,19 +96,19 @@ fi
 cd "$REPO_ROOT/tpcc/pytpcc"
 
 if [ "$step_mode" != "execute" ]; then
-    step "[$phase/$mode_name] LOAD  W=$warehouses SF=$scalefactor C=$clients addr=$addrs"
+    step "[$phase/$mode_name] LOAD  W=$warehouses SF=$scalefactor C=$clients seed=${seed:-rand} addr=$addrs"
     "$PY" tpcc.py --config="$cfg" \
         --warehouses="$warehouses" --scalefactor="$scalefactor" \
-        --clients="$clients" --reset --no-execute typedb3 \
+        --clients="$clients" --reset --no-execute "${seed_args[@]}" typedb3 \
         > "$out_dir/load.log" 2>&1
     log "  load done"
 fi
 
 if [ "$step_mode" != "load" ]; then
-    step "[$phase/$mode_name] EXEC  duration=${duration}s"
+    step "[$phase/$mode_name] EXEC  duration=${duration}s seed=${seed:-rand}"
     "$PY" tpcc.py --config="$cfg" \
         --warehouses="$warehouses" --scalefactor="$scalefactor" \
-        --clients="$clients" --no-load --duration="$duration" typedb3 \
+        --clients="$clients" --no-load --duration="$duration" "${seed_args[@]}" typedb3 \
         > "$out_dir/execute.log" 2>&1
     log "  execute done"
 
