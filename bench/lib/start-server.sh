@@ -102,7 +102,18 @@ start_node() {
         args+=( "--server.admin.port=${aport}" )
     fi
 
-    has_flag development-mode.enabled && args+=( --development-mode.enabled=true )
+    # `--development-mode.enabled=true` is the cluster-feature-branch's way to
+    # disable all reporting/telemetry side-channels. Older builds (typedb-core
+    # at fa8155577, cluster-master at 5f8c4419) don't have this flag; for them
+    # we rely on the three explicit `--diagnostics.*=false` flags above to
+    # achieve the same outcome. Log the state so the user can verify which
+    # path each mode took.
+    if has_flag development-mode.enabled; then
+        args+=( --development-mode.enabled=true )
+        diag_state="reporting=off + development-mode=on"
+    else
+        diag_state="reporting=off (development-mode flag n/a on this build)"
+    fi
 
     # Clustering flags only if the binary supports them. cluster-master may
     # not yet have the clustering surface — that mode will then behave like
@@ -117,6 +128,9 @@ start_node() {
     fi
 
     log "Starting node $n ($server_type) -> $log_file"
+    log "  diagnostics: $diag_state"
+    # Echo the exact launcher invocation so users can verify what's running.
+    log "  + $launcher ${args[*]}"
     nohup "$launcher" "${args[@]}" > "$log_file" 2>&1 &
     disown
 
