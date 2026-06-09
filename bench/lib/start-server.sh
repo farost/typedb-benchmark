@@ -60,8 +60,17 @@ start_node() {
     cport="$(clustering_port "$n")"
     aport="$(admin_port "$n")"
 
-    local -a args=(
-        server
+    # The CLI surface drifts between typedb / typedb-cluster master / feature
+    # branches (some require --diagnostics.deployment-id, some don't have
+    # --development-mode.enabled, etc.). Probe --help once and only pass flags
+    # the binary recognises.
+    local help; help="$("$launcher" server --help 2>&1 || true)"
+    has_flag() { grep -q -- "--$1" <<<"$help"; }
+
+    local -a args=( server )
+    has_flag diagnostics.deployment-id && args+=( --diagnostics.deployment-id=bench )
+
+    args+=(
         "--server.listen-address=0.0.0.0:${gport}"
         "--server.advertise-address=127.0.0.1:${gport}"
         --server.http.enabled=true
@@ -73,21 +82,28 @@ start_node() {
         --diagnostics.monitoring.enabled=false
         --diagnostics.reporting.metrics=false
         --diagnostics.reporting.errors=false
-        --development-mode.enabled=true
         --server.encryption.enabled=false
     )
 
-    # Admin transport: Core exposes admin over a TCP port; Cluster over UDS.
-    if [ "$server_type" = "typedb-cluster" ]; then
+    # Admin transport: prefer UDS where supported; fall back to TCP port.
+    if has_flag server.admin.socket-path; then
+        args+=( "--server.admin.socket-path=${data_dir}/admin.sock" )
+    else
+        args+=( "--server.admin.port=${aport}" )
+    fi
+
+    has_flag development-mode.enabled && args+=( --development-mode.enabled=true )
+
+    # Clustering flags only if the binary supports them. cluster-master may
+    # not yet have the clustering surface — that mode will then behave like
+    # a Core baseline with UDS admin.
+    if has_flag server.clustering.id; then
         args+=(
-            "--server.admin.socket-path=${data_dir}/admin.sock"
             "--server.clustering.id=${n}"
             "--server.clustering.address=127.0.0.1:${cport}"
             "--storage.clustering-directory=${clustering_dir}"
             --server.clustering.encryption.enabled=false
         )
-    else
-        args+=( "--server.admin.port=${aport}" )
     fi
 
     log "Starting node $n ($server_type) -> $log_file"
@@ -95,7 +111,7 @@ start_node() {
     disown
 
     wait_for_port "$gport" 60 || { tail -20 "$log_file" >&2; return 1; }
-    if [ "$server_type" = "typedb-cluster" ]; then
+    if has_flag server.admin.socket-path; then
         wait_for_path "${data_dir}/admin.sock" 60 || return 1
     fi
 }
@@ -131,9 +147,22 @@ if [ "$nodes" -gt 1 ]; then
     fi
 
     log "Registering ${nodes} replicas with node 1..."
+    # `servers status` (read) responds before `servers register` (write) does,
+    # because writes need a raft commit. Retry on `[ADM2] Unavailable`.
     for n in $(seq 2 "$nodes"); do
-        "$launcher" admin --socket-path="$local_sock" \
-            --command "servers register $n 127.0.0.1:$(clustering_port "$n")" >/dev/null
+        reg_deadline=$(( $(date +%s) + 30 ))
+        while :; do
+            out="$("$launcher" admin --socket-path="$local_sock" \
+                    --command "servers register $n 127.0.0.1:$(clustering_port "$n")" 2>&1 || true)"
+            if [[ "$out" != *ADM2* && "$out" != *Unavailable* ]]; then
+                break
+            fi
+            if [ "$(date +%s)" -ge "$reg_deadline" ]; then
+                error "register $n failed after 30s: $out"
+                return 1
+            fi
+            sleep 1
+        done
     done
 
     # Spin until `servers status` shows a primary. Quick poll because raft
@@ -152,6 +181,48 @@ if [ "$nodes" -gt 1 ]; then
     if ! echo "$status" | grep -q "primary"; then
         error "No primary elected within 60s. Last status:"
         echo "$status" >&2
+        return 1
+    fi
+fi
+
+# The gRPC port opens before the database engine is ready to serve queries
+# (we hit `[CXN34] Server is not yet initialized` if we proceed too early).
+# Probe via the driver since that's the actual client.
+workspace="$(config_get workspace)"
+venv="$workspace/venv"
+addr_csv="$(IFS=','; echo "${addrs[*]}")"
+
+if [ -x "$venv/bin/python" ]; then
+    log "Verifying server accepts driver connections..."
+    ready_deadline=$(( $(date +%s) + 60 ))
+    while [ "$(date +%s)" -lt "$ready_deadline" ]; do
+        if ADDR_CSV="$addr_csv" "$venv/bin/python" - <<'PYEOF' >/dev/null 2>&1
+import os, sys
+from typedb.driver import TypeDB, Credentials, DriverOptions, DriverTlsConfig
+addrs = os.environ["ADDR_CSV"].split(",")
+target = addrs[0] if len(addrs) == 1 else addrs
+d = TypeDB.driver(target, Credentials("admin", "password"),
+                  DriverOptions(DriverTlsConfig.disabled()))
+d.close()
+PYEOF
+        then
+            log "Server is ready."
+            break
+        fi
+        sleep 1
+    done
+    # Re-run the probe once to make sure we exit non-zero on persistent failure.
+    if ! ADDR_CSV="$addr_csv" "$venv/bin/python" - <<'PYEOF' >/dev/null 2>&1
+import os, sys
+from typedb.driver import TypeDB, Credentials, DriverOptions, DriverTlsConfig
+addrs = os.environ["ADDR_CSV"].split(",")
+target = addrs[0] if len(addrs) == 1 else addrs
+d = TypeDB.driver(target, Credentials("admin", "password"),
+                  DriverOptions(DriverTlsConfig.disabled()))
+d.close()
+PYEOF
+    then
+        error "Server did not become ready within 60s (driver probe)"
         return 1
     fi
 fi
