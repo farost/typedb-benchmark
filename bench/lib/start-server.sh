@@ -61,7 +61,6 @@ start_node() {
 
     local -a args=(
         server
-        --diagnostics.deployment-id=bench
         "--server.listen-address=0.0.0.0:${gport}"
         "--server.advertise-address=127.0.0.1:${gport}"
         --server.http.enabled=true
@@ -106,8 +105,28 @@ done
 
 # Multi-node: register peers via admin RPC, then wait for primary election.
 if [ "$nodes" -gt 1 ]; then
-    log "Registering ${nodes} replicas with node 1..."
     local_sock="$run_dir/1/server/data/admin.sock"
+
+    # The admin socket file appears before the admin service is ready to
+    # accept RPCs — the first call after socket creation returns
+    # `[ADM2] Unavailable`. Poll a cheap command until it succeeds.
+    log "Waiting for node 1 admin service to accept RPCs..."
+    admin_deadline=$(( $(date +%s) + 60 ))
+    while [ "$(date +%s)" -lt "$admin_deadline" ]; do
+        if "$launcher" admin --socket-path="$local_sock" \
+              --command 'servers status' >/dev/null 2>&1; then
+            log "Admin service ready."
+            break
+        fi
+        sleep 1
+    done
+    if ! "$launcher" admin --socket-path="$local_sock" \
+            --command 'servers status' >/dev/null 2>&1; then
+        error "Admin service on node 1 did not become ready within 60s"
+        return 1
+    fi
+
+    log "Registering ${nodes} replicas with node 1..."
     for n in $(seq 2 "$nodes"); do
         "$launcher" admin --socket-path="$local_sock" \
             --command "servers register $n 127.0.0.1:$(clustering_port "$n")" >/dev/null

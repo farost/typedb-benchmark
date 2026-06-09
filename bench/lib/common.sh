@@ -19,10 +19,10 @@ else
     BOLD=''; RED=''; GREEN=''; YELLOW=''; BLUE=''; NC=''
 fi
 
-log()   { echo -e "${GREEN}[bench]${NC}  $*"; }
+log()   { echo -e "${GREEN}[bench]${NC}  $*" >&2; }
 warn()  { echo -e "${YELLOW}[bench]${NC}  $*" >&2; }
 error() { echo -e "${RED}[bench]${NC}  $*" >&2; }
-step()  { echo -e "${BOLD}${BLUE}==>${NC} ${BOLD}$*${NC}"; }
+step()  { echo -e "${BOLD}${BLUE}==>${NC} ${BOLD}$*${NC}" >&2; }
 
 # Read a top-level scalar (driver.version, workspace, etc.) from config.yml
 # using python3 + PyYAML if available, otherwise a minimal awk fallback.
