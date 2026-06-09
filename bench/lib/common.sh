@@ -138,6 +138,7 @@ grpc_port()       { echo "${1}1729"; }
 http_port()       { echo "${1}8000"; }
 clustering_port() { echo "${1}1730"; }
 monitoring_port() { echo "${1}1731"; }
+admin_port()      { echo "${1}1732"; }
 
 # Block until the given port accepts a TCP connection, or fail after `deadline_seconds`.
 wait_for_port() {

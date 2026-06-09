@@ -53,11 +53,12 @@ start_node() {
 
     mkdir -p "$data_dir" "$clustering_dir"
 
-    local gport hport mport cport
+    local gport hport mport cport aport
     gport="$(grpc_port "$n")"
     hport="$(http_port "$n")"
     mport="$(monitoring_port "$n")"
     cport="$(clustering_port "$n")"
+    aport="$(admin_port "$n")"
 
     local -a args=(
         server
@@ -67,7 +68,6 @@ start_node() {
         "--server.http.listen-address=0.0.0.0:${hport}"
         "--server.http.advertise-address=http://127.0.0.1:${hport}"
         --server.admin.enabled=true
-        "--server.admin.socket-path=${data_dir}/admin.sock"
         "--storage.data-directory=${data_dir}"
         "--diagnostics.monitoring.port=${mport}"
         --diagnostics.monitoring.enabled=false
@@ -77,13 +77,17 @@ start_node() {
         --server.encryption.enabled=false
     )
 
+    # Admin transport: Core exposes admin over a TCP port; Cluster over UDS.
     if [ "$server_type" = "typedb-cluster" ]; then
         args+=(
+            "--server.admin.socket-path=${data_dir}/admin.sock"
             "--server.clustering.id=${n}"
             "--server.clustering.address=127.0.0.1:${cport}"
             "--storage.clustering-directory=${clustering_dir}"
             --server.clustering.encryption.enabled=false
         )
+    else
+        args+=( "--server.admin.port=${aport}" )
     fi
 
     log "Starting node $n ($server_type) -> $log_file"
