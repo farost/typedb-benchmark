@@ -37,6 +37,12 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# config_get reads $BENCH_CONFIG. If the user passed --config, point at that
+# instead of the default — otherwise `workspace` etc. resolve from the wrong
+# file (silent misconfiguration; the error symptom shows up far away as a
+# missing venv).
+export BENCH_CONFIG="$BASE_CONFIG"
+
 # Tests: <name>:<W>:<SF>:<C>:<duration_seconds>
 # Order matters: tests that share fixtures should be adjacent so cache hits.
 # test1 (C=1) and test2 (C=4) both use W=4 SF=10 → share fixtures.
@@ -57,6 +63,41 @@ if [ ! -x "$PY" ]; then
     exit 1
 fi
 
+# Validate base config exists before doing anything destructive.
+if [ ! -f "$BASE_CONFIG" ]; then
+    error "base config not found: $BASE_CONFIG"
+    exit 1
+fi
+
+# Validate at least one test is selected (catches typos in --only).
+selected_count=0
+for test_def in "${TESTS[@]}"; do
+    IFS=: read -r tname _ <<<"$test_def"
+    if [ -z "$ONLY" ] || [ "$ONLY" = "$tname" ]; then
+        selected_count=$((selected_count + 1))
+    fi
+done
+if [ "$selected_count" -eq 0 ]; then
+    error "no test matched --only='$ONLY' (available: $(printf '%s ' "${TESTS[@]%%:*}"))"
+    exit 1
+fi
+
+# Per-test summary tracked across the whole campaign — printed at the end.
+declare -a CAMPAIGN_SUMMARY=()
+
+# Drop campaign with a clear final summary even on Ctrl-C.
+print_final_summary() {
+    echo >&2
+    step "Campaign summary"
+    if [ "${#CAMPAIGN_SUMMARY[@]}" -eq 0 ]; then
+        warn "no tests completed"
+    else
+        for line in "${CAMPAIGN_SUMMARY[@]}"; do echo "  $line" >&2; done
+    fi
+    log "Reports root: $REPORTS_DIR/"
+}
+trap print_final_summary EXIT
+
 for test_def in "${TESTS[@]}"; do
     IFS=: read -r tname tW tSF tC tDur <<<"$test_def"
     if [ -n "$ONLY" ] && [ "$ONLY" != "$tname" ]; then
@@ -66,55 +107,88 @@ for test_def in "${TESTS[@]}"; do
     step "=== campaign test: $tname  (W=$tW SF=$tSF C=$tC dur=${tDur}s × $REPS reps) ==="
 
     # Generate a config override for this test (inherits driver, fixtures,
-    # seed, modes, smoke from base).
+    # seed, modes, smoke from base). Crashes hard with a clear message if
+    # the base config can't be parsed — that's a config bug worth seeing.
     test_dir="$REPORTS_DIR/$tname"
     mkdir -p "$test_dir"
     test_config="$test_dir/config.yml"
-    "$PY" - "$BASE_CONFIG" "$tW" "$tSF" "$tC" "$tDur" "$test_config" <<'PY'
+    if ! "$PY" - "$BASE_CONFIG" "$tW" "$tSF" "$tC" "$tDur" "$test_config" <<'PY'
 import sys, yaml
-base, W, SF, C, D, out = sys.argv[1:]
-with open(base) as f:
-    cfg = yaml.safe_load(f)
-cfg.setdefault('benchmark', {})
-cfg['benchmark']['warehouses'] = int(W)
-cfg['benchmark']['scalefactor'] = int(SF)
-cfg['benchmark']['clients'] = int(C)
-cfg['benchmark']['duration_seconds'] = int(D)
-with open(out, 'w') as f:
-    yaml.safe_dump(cfg, f, sort_keys=False)
+try:
+    base, W, SF, C, D, out = sys.argv[1:]
+    with open(base) as f:
+        cfg = yaml.safe_load(f)
+    if not isinstance(cfg, dict):
+        sys.stderr.write(f"config_override: {base} did not parse as a mapping\n")
+        sys.exit(1)
+    cfg.setdefault('benchmark', {})
+    cfg['benchmark']['warehouses'] = int(W)
+    cfg['benchmark']['scalefactor'] = int(SF)
+    cfg['benchmark']['clients'] = int(C)
+    cfg['benchmark']['duration_seconds'] = int(D)
+    with open(out, 'w') as f:
+        yaml.safe_dump(cfg, f, sort_keys=False)
+except Exception as e:
+    sys.stderr.write(f"config_override failed: {type(e).__name__}: {e}\n")
+    sys.exit(1)
 PY
+    then
+        error "config generation failed for $tname; skipping test"
+        CAMPAIGN_SUMMARY+=("✗ $tname  — config generation failed")
+        continue
+    fi
 
     # Run the reps. Each invocation creates a new run dir under bench/results/.
     # We snapshot the dir listing before/after to capture this rep's run_id.
     run_ids=()
+    fail_count=0
     for rep in $(seq 1 "$REPS"); do
         log ""
         log "--- $tname rep $rep / $REPS ---"
         before_listing="$(ls -1 "$BENCH_DIR/results/" 2>/dev/null || true)"
         # Don't abort campaign on a single failed rep — aggregator tolerates gaps.
-        bash "$BENCH_DIR/run.sh" --config "$test_config" --skip-setup --skip-smoke || \
-            warn "$tname rep $rep had failures; continuing"
+        rep_rc=0
+        bash "$BENCH_DIR/run.sh" --config "$test_config" --skip-setup --skip-smoke || rep_rc=$?
+        if [ "$rep_rc" -ne 0 ]; then
+            warn "$tname rep $rep exited rc=$rep_rc; continuing"
+            fail_count=$((fail_count + 1))
+        fi
         after_listing="$(ls -1 "$BENCH_DIR/results/" 2>/dev/null || true)"
         new_id="$(comm -13 <(printf '%s' "$before_listing" | sort) \
-                              <(printf '%s' "$after_listing" | sort) | tail -1)"
+                              <(printf '%s' "$after_listing" | sort) 2>/dev/null | tail -1)"
         if [ -n "$new_id" ]; then
             run_ids+=("$new_id")
             log "  → run id: $new_id"
         else
-            warn "  → no new run id detected after rep $rep"
+            warn "  → no new run id detected after rep $rep (rc=$rep_rc)"
         fi
     done
 
     # Aggregate the reps for this test → emits summary.md + runs.tsv.
+    # Aggregator failure does NOT abort campaign; later tests keep running.
+    agg_status="skipped"
     if [ "${#run_ids[@]}" -gt 0 ]; then
         log ""
         log "Aggregating $tname (${#run_ids[@]} runs)..."
-        "$PY" "$BENCH_DIR/lib/aggregate.py" "$tname" "$test_dir" "${run_ids[@]}"
-        log "Report ready: $test_dir/summary.md"
-        log "TSV ready:    $test_dir/runs.tsv"
+        if "$PY" "$BENCH_DIR/lib/aggregate.py" "$tname" "$test_dir" "${run_ids[@]}"; then
+            log "Report ready: $test_dir/summary.md"
+            log "TSV ready:    $test_dir/runs.tsv"
+            agg_status="ok"
+        else
+            error "aggregator failed for $tname (run_ids preserved at $test_dir for manual re-aggregation)"
+            # Save the run_ids so the user can re-aggregate manually.
+            printf '%s\n' "${run_ids[@]}" > "$test_dir/run_ids.txt"
+            agg_status="agg-failed"
+        fi
     else
         warn "$tname produced no runs; skipping aggregation"
+        agg_status="no-runs"
     fi
-done
 
-step "Campaign complete. Reports under $REPORTS_DIR/"
+    case "$agg_status" in
+        ok)          status_icon="✓" ;;
+        agg-failed)  status_icon="!" ;;
+        no-runs|skipped) status_icon="✗" ;;
+    esac
+    CAMPAIGN_SUMMARY+=("$status_icon $tname  ${#run_ids[@]}/$REPS reps produced runs, $fail_count rc-failures, aggregate=$agg_status")
+done

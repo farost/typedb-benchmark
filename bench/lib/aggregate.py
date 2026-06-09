@@ -41,14 +41,29 @@ def fmt(x, prec=1):
 
 
 def load_run(run_id, mode):
-    """Returns the parsed result.json dict, or None if missing/unreadable."""
+    """Returns the parsed result.json dict, or None if missing/unreadable.
+
+    Surfaces parse failures on stderr so the user can see what got skipped.
+    """
     p = BENCH_RESULTS / run_id / "bench" / mode / "result.json"
     if not p.is_file():
         return None
     try:
         return json.loads(p.read_text())
-    except Exception:
+    except Exception as e:
+        sys.stderr.write(f"aggregate: skipping {p} ({type(e).__name__}: {e})\n")
         return None
+
+
+def safe_get(d, *keys, default=None):
+    """Walk a nested dict, returning `default` if any key is missing or the
+    intermediate value isn't a dict. Lets us tolerate result.json shape drift."""
+    cur = d
+    for k in keys:
+        if not isinstance(cur, dict) or k not in cur:
+            return default
+        cur = cur[k]
+    return cur
 
 
 def discover_modes(run_ids):
@@ -100,8 +115,11 @@ def write_summary(test_name, out_dir, modes, per_mode):
     # Core mean tpmC for the vs-core ratio.
     core_tpmc_mean = math.nan
     if "typedb-core" in per_mode and per_mode["typedb-core"]["runs"]:
-        core_tpmcs = [r["tpmc"] for _, r in per_mode["typedb-core"]["runs"]]
-        core_tpmc_mean = statistics.mean(core_tpmcs)
+        core_tpmcs = [safe_get(r, "tpmc", default=math.nan)
+                      for _, r in per_mode["typedb-core"]["runs"]]
+        core_tpmcs = [x for x in core_tpmcs if not math.isnan(x)]
+        if core_tpmcs:
+            core_tpmc_mean = statistics.mean(core_tpmcs)
 
     for m in modes:
         runs = per_mode[m]["runs"]
@@ -109,9 +127,13 @@ def write_summary(test_name, out_dir, modes, per_mode):
         if n == 0:
             lines.append(f"| `{m}` | 0 | (no data) | — | — | — | — |")
             continue
-        tpmcs = [r["tpmc"] for _, r in runs]
-        totals = [r["total"] for _, r in runs]
-        aborts = [r["aborts"] for _, r in runs]
+        tpmcs = [safe_get(r, "tpmc", default=math.nan) for _, r in runs]
+        tpmcs = [x for x in tpmcs if not math.isnan(x)]
+        totals = [safe_get(r, "total", default=0) for _, r in runs]
+        aborts = [safe_get(r, "aborts", default=0) for _, r in runs]
+        if not tpmcs:
+            lines.append(f"| `{m}` | {n} | (no tpmc field) | — | — | — | — |")
+            continue
         tpmc_mean, tpmc_std = mean_std(tpmcs)
         abort_rate = [a / max(t, 1) for a, t in zip(aborts, totals)]
         ar_mean, ar_std = mean_std(abort_rate)
@@ -132,22 +154,29 @@ def write_summary(test_name, out_dir, modes, per_mode):
         lines.append("|---|---:|---:|---:|---:|---:|")
         for m in modes:
             runs = per_mode[m]["runs"]
-            p50s = [r[wl]["latency"]["p50"] for _, r in runs if wl in r]
-            p95s = [r[wl]["latency"]["p95"] for _, r in runs if wl in r]
-            p99s = [r[wl]["latency"]["p99"] for _, r in runs if wl in r]
-            maxs = [r[wl]["latency"]["max"] for _, r in runs if wl in r]
+            p50s, p95s, p99s, maxs = [], [], [], []
+            for _, r in runs:
+                p50 = safe_get(r, wl, "latency", "p50")
+                p95 = safe_get(r, wl, "latency", "p95")
+                p99 = safe_get(r, wl, "latency", "p99")
+                mx  = safe_get(r, wl, "latency", "max")
+                if p50 is not None: p50s.append(p50)
+                if p95 is not None: p95s.append(p95)
+                if p99 is not None: p99s.append(p99)
+                if mx  is not None: maxs.append(mx)
             if not p50s:
                 lines.append(f"| `{m}` | 0 | — | — | — | — |")
                 continue
-            p50m, p50s_ = mean_std(p50s)
-            p95m, p95s_ = mean_std(p95s)
-            p99m, p99s_ = mean_std(p99s)
+            p50m, p50sd = mean_std(p50s)
+            p95m, p95sd = mean_std(p95s)
+            p99m, p99sd = mean_std(p99s)
+            max_mean = statistics.mean(maxs) if maxs else math.nan
             lines.append(
                 f"| `{m}` | {len(p50s)} | "
-                f"{fmt(p50m)} ± {fmt(p50s_)} | "
-                f"{fmt(p95m)} ± {fmt(p95s_)} | "
-                f"{fmt(p99m)} ± {fmt(p99s_)} | "
-                f"{fmt(statistics.mean(maxs))} |"
+                f"{fmt(p50m)} ± {fmt(p50sd)} | "
+                f"{fmt(p95m)} ± {fmt(p95sd)} | "
+                f"{fmt(p99m)} ± {fmt(p99sd)} | "
+                f"{fmt(max_mean)} |"
             )
         lines.append("")
 
@@ -161,7 +190,7 @@ def write_summary(test_name, out_dir, modes, per_mode):
         cells = []
         for i in range(n_reps):
             if i < len(runs):
-                cells.append(fmt(runs[i][1]["tpmc"], 1))
+                cells.append(fmt(safe_get(runs[i][1], "tpmc", default=math.nan), 1))
             else:
                 cells.append("—")
         lines.append(f"| `{m}` | " + " | ".join(cells) + " |")
@@ -187,27 +216,46 @@ def write_tsv(test_name, out_dir, modes, per_mode):
         for rid, r in per_mode[m]["runs"]:
             by_run.setdefault(rid, {})[m] = r
 
+    def fnum(x, prec=1, default=""):
+        if x is None or (isinstance(x, float) and math.isnan(x)):
+            return default
+        try:
+            return f"{x:.{prec}f}"
+        except (TypeError, ValueError):
+            return default
+
     for rid in sorted(by_run):
-        core_in_rep = by_run[rid].get("typedb-core", {}).get("tpmc", math.nan)
-        date = rid[:8]
-        date = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
+        core_in_rep = safe_get(by_run[rid].get("typedb-core", {}), "tpmc",
+                               default=math.nan)
+        # Parse the YYYYMMDD prefix of the run_id timestamp; leave blank if
+        # the run_id is non-standard (e.g. injected by manual aggregate runs).
+        if len(rid) >= 8 and rid[:8].isdigit():
+            d = rid[:8]
+            date = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+        else:
+            date = ""
         for m in modes:
             r = by_run[rid].get(m)
             if r is None:
                 continue
-            tpmc = r["tpmc"]
-            vs_core = (tpmc / core_in_rep) if core_in_rep else math.nan
+            tpmc = safe_get(r, "tpmc", default=math.nan)
+            total = safe_get(r, "total", default=0)
+            aborts = safe_get(r, "aborts", default=0)
+            duration = safe_get(r, "duration", default=math.nan)
+            vs_core = (tpmc / core_in_rep) if (core_in_rep and not math.isnan(core_in_rep)
+                                               and not math.isnan(tpmc)) else math.nan
             row = [
                 rid, date, test_name, m,
-                f"{r['duration']:.1f}", str(r["total"]), f"{tpmc:.2f}",
-                f"{vs_core:.3f}", str(r["aborts"]),
-                f"{r['aborts']/max(r['total'],1):.4f}", str(r.get("total_retries", 0)),
+                fnum(duration, 1), str(total), fnum(tpmc, 2),
+                fnum(vs_core, 3), str(aborts),
+                fnum(aborts / max(total, 1), 4),
+                str(safe_get(r, "total_retries", default=0)),
             ]
             for wl in WORKLOADS:
-                lat = r[wl]["latency"]
-                row += [str(r[wl]["total"]),
-                        f"{lat['p50']:.1f}", f"{lat['p75']:.1f}", f"{lat['p90']:.1f}",
-                        f"{lat['p95']:.1f}", f"{lat['p99']:.1f}", f"{lat['max']:.1f}"]
+                wl_total = safe_get(r, wl, "total", default=0)
+                row.append(str(wl_total))
+                for k in ("p50", "p75", "p90", "p95", "p99", "max"):
+                    row.append(fnum(safe_get(r, wl, "latency", k), 1))
             rows.append("\t".join(row))
     return "\n".join(rows) + "\n"
 
@@ -219,15 +267,26 @@ def main():
     test_name = sys.argv[1]
     out_dir = Path(sys.argv[2])
     run_ids = sys.argv[3:]
-    out_dir.mkdir(parents=True, exist_ok=True)
 
-    modes, per_mode = summarise(test_name, run_ids)
-    md = write_summary(test_name, out_dir, modes, per_mode)
-    tsv = write_tsv(test_name, out_dir, modes, per_mode)
-
-    (out_dir / "summary.md").write_text(md)
-    (out_dir / "runs.tsv").write_text(tsv)
-    sys.stderr.write(f"aggregate: wrote {out_dir / 'summary.md'} and {out_dir / 'runs.tsv'}\n")
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        modes, per_mode = summarise(test_name, run_ids)
+        md = write_summary(test_name, out_dir, modes, per_mode)
+        tsv = write_tsv(test_name, out_dir, modes, per_mode)
+        (out_dir / "summary.md").write_text(md)
+        (out_dir / "runs.tsv").write_text(tsv)
+        sys.stderr.write(f"aggregate: wrote {out_dir / 'summary.md'} and {out_dir / 'runs.tsv'}\n")
+    except Exception as e:
+        # Surface the exception clearly rather than dumping a Python traceback
+        # into the campaign log. Caller (campaign.sh) can preserve run_ids
+        # so the user can re-aggregate manually.
+        import traceback
+        sys.stderr.write(
+            f"\naggregate: FAILED for test={test_name} runs={run_ids}\n"
+            f"  {type(e).__name__}: {e}\n"
+        )
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
