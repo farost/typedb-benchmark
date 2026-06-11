@@ -222,44 +222,50 @@ addr_csv="$(IFS=','; echo "${addrs[*]}")"
 
 if [ -x "$venv/bin/python" ]; then
     log "Verifying server accepts driver connections..."
-    # Require TWO consecutive successful probes before declaring ready. For a
-    # 3-node raft cluster restarted from a fixture, the primary can briefly
-    # change over during heartbeat reshuffles — a single passing probe is
-    # not a guarantee of stable readiness (we saw `Server is ready` followed
-    # seconds later by `Could not find a primary server` on `databases.contains`
-    # in production runs). Two-in-a-row across a 1s pause is much more robust.
-    ready_deadline=$(( $(date +%s) + 120 ))
-    consecutive=0
-    last_err=""
-    while [ "$(date +%s)" -lt "$ready_deadline" ]; do
-        if probe_out="$(ADDR_CSV="$addr_csv" "$venv/bin/python" - <<'PYEOF' 2>&1
-import os, sys
+    # The probe code USED to be a heredoc-inside-command-substitution-inside-if,
+    # which silently failed in production: the loop ran the full deadline with
+    # neither successes nor failure output (consecutive never incremented and
+    # last_err stayed empty). Rewriting as: write the probe to a temp .py once,
+    # then run it via `timeout` in the loop. No heredoc inside the if-condition.
+    probe_py="$(mktemp)"
+    cat > "$probe_py" <<'PYEOF'
+import os
 from typedb.driver import TypeDB, Credentials, DriverOptions, DriverTlsConfig
 addrs = os.environ["ADDR_CSV"].split(",")
 target = addrs[0] if len(addrs) == 1 else addrs
 d = TypeDB.driver(target, Credentials("admin", "password"),
                   DriverOptions(DriverTlsConfig.disabled()))
-# Force a primary lookup — gRPC bind alone doesn't mean raft has elected a
-# leader (`[CXN37] Could not find a primary server`).
 d.databases.contains("__healthcheck__")
 d.close()
 PYEOF
-        )"; then
+
+    # Require TWO consecutive successful probes — guards against a momentary
+    # primary changeover during raft heartbeat reshuffle, which can happen
+    # in the first seconds after restoring a 3-node cluster from fixture.
+    ready_deadline=$(( $(date +%s) + 120 ))
+    consecutive=0
+    last_err=""
+    while [ "$(date +%s)" -lt "$ready_deadline" ]; do
+        probe_err="$(mktemp)"
+        if ADDR_CSV="$addr_csv" timeout 10 "$venv/bin/python" "$probe_py" >/dev/null 2>"$probe_err"; then
             consecutive=$((consecutive + 1))
             if [ "$consecutive" -ge 2 ]; then
                 log "Server is ready (2 consecutive successful probes)."
                 ready_ok=1
+                rm -f "$probe_err"
                 break
             fi
         else
             consecutive=0
-            last_err="$probe_out"
+            last_err="$(cat "$probe_err")"
         fi
+        rm -f "$probe_err"
         sleep 1
     done
+    rm -f "$probe_py"
     if [ "${ready_ok:-0}" != "1" ]; then
         error "Server did not stabilise within 120s (driver probe). Last error:"
-        echo "$last_err" >&2
+        echo "${last_err:-<no probe ever produced stderr — check ${venv}/bin/python and driver install>}" >&2
         exit 1
     fi
 fi
