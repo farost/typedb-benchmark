@@ -155,7 +155,7 @@ if [ "$nodes" -gt 1 ]; then
     # accept RPCs — the first call after socket creation returns
     # `[ADM2] Unavailable`. Poll a cheap command until it succeeds.
     log "Waiting for node 1 admin service to accept RPCs..."
-    admin_deadline=$(( $(date +%s) + 60 ))
+    admin_deadline=$(( $(date +%s) + 120 ))
     while [ "$(date +%s)" -lt "$admin_deadline" ]; do
         if "$launcher" admin --socket-path="$local_sock" \
               --command 'servers status' >/dev/null 2>&1; then
@@ -166,8 +166,8 @@ if [ "$nodes" -gt 1 ]; then
     done
     if ! "$launcher" admin --socket-path="$local_sock" \
             --command 'servers status' >/dev/null 2>&1; then
-        error "Admin service on node 1 did not become ready within 60s"
-        return 1
+        error "Admin service on node 1 did not become ready within 120s"
+        exit 1
     fi
 
     if [ "$restored_from_fixture" = "true" ]; then
@@ -177,7 +177,7 @@ if [ "$nodes" -gt 1 ]; then
         # `servers status` (read) responds before `servers register` (write) does,
         # because writes need a raft commit. Retry on `[ADM2] Unavailable`.
         for n in $(seq 2 "$nodes"); do
-            reg_deadline=$(( $(date +%s) + 30 ))
+            reg_deadline=$(( $(date +%s) + 60 ))
             while :; do
                 out="$("$launcher" admin --socket-path="$local_sock" \
                         --command "servers register $n 127.0.0.1:$(clustering_port "$n")" 2>&1 || true)"
@@ -185,8 +185,8 @@ if [ "$nodes" -gt 1 ]; then
                     break
                 fi
                 if [ "$(date +%s)" -ge "$reg_deadline" ]; then
-                    error "register $n failed after 30s: $out"
-                    return 1
+                    error "register $n failed after 60s: $out"
+                    exit 1
                 fi
                 sleep 1
             done
@@ -196,7 +196,7 @@ if [ "$nodes" -gt 1 ]; then
     # Spin until `servers status` shows a primary. Quick poll because raft
     # election in a freshly-formed local cluster usually completes in <2s.
     log "Waiting for primary election..."
-    local_deadline=$(( $(date +%s) + 60 ))
+    local_deadline=$(( $(date +%s) + 120 ))
     while [ "$(date +%s)" -lt "$local_deadline" ]; do
         status="$("$launcher" admin --socket-path="$local_sock" \
                    --command 'servers status' 2>/dev/null || true)"
@@ -207,9 +207,9 @@ if [ "$nodes" -gt 1 ]; then
         sleep 1
     done
     if ! echo "$status" | grep -q "primary"; then
-        error "No primary elected within 60s. Last status:"
+        error "No primary elected within 120s. Last status:"
         echo "$status" >&2
-        return 1
+        exit 1
     fi
 fi
 
@@ -222,9 +222,17 @@ addr_csv="$(IFS=','; echo "${addrs[*]}")"
 
 if [ -x "$venv/bin/python" ]; then
     log "Verifying server accepts driver connections..."
-    ready_deadline=$(( $(date +%s) + 60 ))
+    # Require TWO consecutive successful probes before declaring ready. For a
+    # 3-node raft cluster restarted from a fixture, the primary can briefly
+    # change over during heartbeat reshuffles — a single passing probe is
+    # not a guarantee of stable readiness (we saw `Server is ready` followed
+    # seconds later by `Could not find a primary server` on `databases.contains`
+    # in production runs). Two-in-a-row across a 1s pause is much more robust.
+    ready_deadline=$(( $(date +%s) + 120 ))
+    consecutive=0
+    last_err=""
     while [ "$(date +%s)" -lt "$ready_deadline" ]; do
-        if ADDR_CSV="$addr_csv" "$venv/bin/python" - <<'PYEOF' >/dev/null 2>&1
+        if probe_out="$(ADDR_CSV="$addr_csv" "$venv/bin/python" - <<'PYEOF' 2>&1
 import os, sys
 from typedb.driver import TypeDB, Credentials, DriverOptions, DriverTlsConfig
 addrs = os.environ["ADDR_CSV"].split(",")
@@ -236,28 +244,23 @@ d = TypeDB.driver(target, Credentials("admin", "password"),
 d.databases.contains("__healthcheck__")
 d.close()
 PYEOF
-        then
-            log "Server is ready."
-            break
+        )"; then
+            consecutive=$((consecutive + 1))
+            if [ "$consecutive" -ge 2 ]; then
+                log "Server is ready (2 consecutive successful probes)."
+                ready_ok=1
+                break
+            fi
+        else
+            consecutive=0
+            last_err="$probe_out"
         fi
         sleep 1
     done
-    # Re-run the probe once to make sure we exit non-zero on persistent failure.
-    if ! ADDR_CSV="$addr_csv" "$venv/bin/python" - <<'PYEOF' >/dev/null 2>&1
-import os, sys
-from typedb.driver import TypeDB, Credentials, DriverOptions, DriverTlsConfig
-addrs = os.environ["ADDR_CSV"].split(",")
-target = addrs[0] if len(addrs) == 1 else addrs
-d = TypeDB.driver(target, Credentials("admin", "password"),
-                  DriverOptions(DriverTlsConfig.disabled()))
-# Force a primary lookup — gRPC bind alone doesn't mean raft has elected a
-# leader (`[CXN37] Could not find a primary server`).
-d.databases.contains("__healthcheck__")
-d.close()
-PYEOF
-    then
-        error "Server did not become ready within 60s (driver probe)"
-        return 1
+    if [ "${ready_ok:-0}" != "1" ]; then
+        error "Server did not stabilise within 120s (driver probe). Last error:"
+        echo "$last_err" >&2
+        exit 1
     fi
 fi
 
