@@ -193,10 +193,13 @@ if [ "$nodes" -gt 1 ]; then
         done
     fi
 
-    # Spin until `servers status` shows a primary. Quick poll because raft
-    # election in a freshly-formed local cluster usually completes in <2s.
+    # Spin until `servers status` shows a primary. Election in a freshly-formed
+    # local cluster usually completes in <2s, but for a 3n fixture-restored
+    # cluster the primary can take longer to stabilise (raft log replay must
+    # finish before a candidate gets enough votes). 180s gives W=8 fixtures
+    # headroom without masking genuine failures.
     log "Waiting for primary election..."
-    local_deadline=$(( $(date +%s) + 120 ))
+    local_deadline=$(( $(date +%s) + 180 ))
     while [ "$(date +%s)" -lt "$local_deadline" ]; do
         status="$("$launcher" admin --socket-path="$local_sock" \
                    --command 'servers status' 2>/dev/null || true)"
@@ -207,7 +210,7 @@ if [ "$nodes" -gt 1 ]; then
         sleep 1
     done
     if ! echo "$status" | grep -q "primary"; then
-        error "No primary elected within 120s. Last status:"
+        error "No primary elected within 180s. Last status:"
         echo "$status" >&2
         exit 1
     fi
@@ -242,7 +245,12 @@ PYEOF
     # Require TWO consecutive successful probes — guards against a momentary
     # primary changeover during raft heartbeat reshuffle, which can happen
     # in the first seconds after restoring a 3-node cluster from fixture.
-    ready_deadline=$(( $(date +%s) + 120 ))
+    # 240s: a W=8 fixture-restored 3n cluster spends most of its boot inside
+    # raft log replay; the gRPC port opens early but `databases.contains`
+    # blocks until the apply queue catches up. Observed flake at 120s on
+    # test3-c16-w8; quadrupling absorbs the long tail without masking
+    # genuine startup failures (the 2-consecutive gate would still catch them).
+    ready_deadline=$(( $(date +%s) + 240 ))
     consecutive=0
     last_err=""
     while [ "$(date +%s)" -lt "$ready_deadline" ]; do
@@ -264,7 +272,7 @@ PYEOF
     done
     rm -f "$probe_py"
     if [ "${ready_ok:-0}" != "1" ]; then
-        error "Server did not stabilise within 120s (driver probe). Last error:"
+        error "Server did not stabilise within 240s (driver probe). Last error:"
         echo "${last_err:-<no probe ever produced stderr — check ${venv}/bin/python and driver install>}" >&2
         exit 1
     fi
