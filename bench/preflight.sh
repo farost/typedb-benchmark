@@ -93,32 +93,54 @@ probe_binary() {
     rm -rf "$dir"
     mkdir -p "$dir"
 
-    # Single-node config is fine even for the cluster-3n binary — we're
-    # only checking log format, not multi-node behavior.
-    "$binary" server \
-        --server.listen-address=127.0.0.1:19999 \
-        --server.advertise-address=127.0.0.1:19999 \
-        --server.http.enabled=false \
-        --server.admin.enabled=true \
-        --server.admin.socket-path="$dir/admin.sock" \
-        --storage.data-directory="$dir/data" \
-        --diagnostics.deployment-id=preflight \
-        --diagnostics.monitoring.enabled=false \
-        --diagnostics.reporting.metrics=false \
-        --diagnostics.reporting.errors=false \
-        --server.encryption.enabled=false \
-        --server.clustering.id=1 \
-        --server.clustering.address=127.0.0.1:19998 \
-        --storage.clustering-directory="$dir/clustering" \
-        --server.clustering.encryption.enabled=false \
-        > "$BOOT_LOG" 2>&1 &
+    # The CLI surface drifts across modes (typedb-core has no clustering
+    # flags; some cluster builds require --diagnostics.deployment-id; etc.).
+    # Mirror start-server.sh's approach: probe --help once and only pass
+    # flags the binary actually recognises. Hardcoding a single arg list
+    # caused typedb-core and cluster-master-1n to bail with a Usage error.
+    local help; help="$("$binary" server --help 2>&1 || true)"
+    has_flag() { grep -q -- "--$1" <<<"$help"; }
+
+    local -a args=(server)
+    has_flag diagnostics.deployment-id && args+=(--diagnostics.deployment-id=preflight)
+    args+=(
+        --server.listen-address=127.0.0.1:19999
+        --server.advertise-address=127.0.0.1:19999
+        --server.http.enabled=false
+        --server.admin.enabled=true
+        "--server.admin.socket-path=$dir/admin.sock"
+        "--storage.data-directory=$dir/data"
+        --diagnostics.monitoring.enabled=false
+        --diagnostics.reporting.metrics=false
+        --diagnostics.reporting.errors=false
+        --server.encryption.enabled=false
+    )
+    if has_flag server.clustering.id; then
+        args+=(
+            --server.clustering.id=1
+            --server.clustering.address=127.0.0.1:19998
+            "--storage.clustering-directory=$dir/clustering"
+            --server.clustering.encryption.enabled=false
+        )
+    fi
+    if has_flag development-mode.enabled; then
+        args+=(--development-mode.enabled=true)
+    fi
+
+    "$binary" "${args[@]}" > "$BOOT_LOG" 2>&1 &
     local pid=$!
     sleep 12
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
 
-    OLD_COUNT=$(grep -cE '^[A-Z][a-z]{2} [0-9]+ [0-9]+:[0-9]+:[0-9]+\.[0-9]+ (DEBG|INFO|WARN|ERRO)' "$BOOT_LOG" 2>/dev/null || echo 0)
-    NEW_COUNT=$(grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T' "$BOOT_LOG" 2>/dev/null || echo 0)
+    # `grep -c` exits 1 on zero matches but still prints "0" to stdout.
+    # Using `|| echo 0` here produces "0\n0" which breaks the integer
+    # comparison downstream. `|| true` suppresses the exit, captures only
+    # grep's own "0". `${var:-0}` guards against missing-file edge cases.
+    OLD_COUNT=$(grep -cE '^[A-Z][a-z]{2} [0-9]+ [0-9]+:[0-9]+:[0-9]+\.[0-9]+ (DEBG|INFO|WARN|ERRO)' "$BOOT_LOG" 2>/dev/null || true)
+    NEW_COUNT=$(grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T' "$BOOT_LOG" 2>/dev/null || true)
+    OLD_COUNT=${OLD_COUNT:-0}
+    NEW_COUNT=${NEW_COUNT:-0}
 }
 
 # Best-effort: launcher path. The harness writes per-mode extract paths to
