@@ -190,6 +190,14 @@ check_mode() {
         pkill -KILL -f typedb_server_bin 2>/dev/null || true; sleep 1
         probe_binary "$launcher" "$name"
 
+        # Classify what we observed (separate from pass/fail decision).
+        # NB: typedb-core writes tracing to `Tee::new(stderr, file_appender)`,
+        # so the actual log file lives at <logdir>/typedb.log. The stderr
+        # half lands in BOOT_LOG. For cluster-feature, the slog→tracing
+        # bridge emits raft records to that same stderr early, so we see
+        # tracing lines. For cluster-master (pre-migration), slog-term may
+        # route elsewhere AND typedb's tracing init can fire after our 12s
+        # SIGTERM, leaving BOOT_LOG with only the shutdown handler's output.
         if [ "${NEW_COUNT:-0}" -gt 0 ] && [ "${OLD_COUNT:-0}" -eq 0 ]; then
             format_observed="tracing-only (new=$NEW_COUNT old=0)"
         elif [ "${OLD_COUNT:-0}" -gt 0 ] && [ "${NEW_COUNT:-0}" -eq 0 ]; then
@@ -197,22 +205,30 @@ check_mode() {
         elif [ "${OLD_COUNT:-0}" -gt 0 ] && [ "${NEW_COUNT:-0}" -gt 0 ]; then
             format_observed="mixed (old=$OLD_COUNT new=$NEW_COUNT)"
         else
-            format_observed="SILENT (no parseable lines — boot may have failed)"
-            issues+=("boot probe produced no log lines — check $BOOT_LOG")
-            MODE_OK=0
+            format_observed="no-stdout-log-lines (build may tee to file only)"
         fi
 
         case "$expected" in
             tracing-only)
+                # Strict: tracing must appear AND no slog leakage.
                 if [ "${OLD_COUNT:-0}" -gt 0 ]; then
                     issues+=("expected tracing-only, found $OLD_COUNT old-slog lines (binary likely pre-migration)")
                     MODE_OK=0
                 fi
                 if [ "${NEW_COUNT:-0}" -eq 0 ]; then
-                    issues+=("expected tracing output, but got 0 tracing lines")
+                    issues+=("expected tracing output, but got 0 tracing lines on stderr")
                     MODE_OK=0
                 fi ;;
-            any-output) : ;;  # already handled by silent check above
+            any-output)
+                # Loose: just confirm the binary actually started. A non-empty
+                # boot log (even just "Received SIGTERM. Exited.") proves the
+                # process ran past argv parsing without crashing. This is the
+                # only signal we have for builds that route their tracing
+                # output entirely to <logdir>/typedb.log instead of stderr.
+                if [ ! -s "$BOOT_LOG" ]; then
+                    issues+=("boot log empty — binary may have failed before any output")
+                    MODE_OK=0
+                fi ;;
         esac
     fi
 
