@@ -15,6 +15,14 @@
 #   bench/campaign.sh --only test1-c1-w4             # just one test
 #   bench/campaign.sh --mode cluster-feature-3n \    # top up a single mode (e.g. when a flaky
 #                    --only test3-c16-w8 --reps 3    # mode failed reps in a prior campaign)
+#   bench/campaign.sh --skip-preflight               # skip the boot-probe verification
+#                                                    # (faster restart; only safe right after a
+#                                                    # successful preflight in the same shell)
+#
+# By default, bench/preflight.sh is invoked before the test loop fires. The
+# preflight does a 12s boot probe per mode, asserts the harness's cloned repo
+# HEAD matches each pinned commit, and classifies the log format. ~1 minute of
+# verification, prevents 4+ hours of silent-failure campaigns.
 #
 # Tests defined inline below. Edit TESTS=(...) to add/remove configurations.
 
@@ -26,6 +34,7 @@ source "$BENCH_DIR/lib/common.sh"
 REPS=5
 ONLY=""
 ONLY_MODE=""
+SKIP_PREFLIGHT=0
 BASE_CONFIG="$BENCH_DIR/config.yml"
 
 while [ $# -gt 0 ]; do
@@ -34,6 +43,7 @@ while [ $# -gt 0 ]; do
         --only) ONLY="$2"; shift 2 ;;
         --mode) ONLY_MODE="$2"; shift 2 ;;
         --config) BASE_CONFIG="$2"; shift 2 ;;
+        --skip-preflight) SKIP_PREFLIGHT=1; shift ;;
         -h|--help)
             sed -n '2,/^set/p' "$0" | sed 's/^# \?//' | head -n -1
             exit 0 ;;
@@ -80,6 +90,20 @@ if [ -n "$ONLY_MODE" ]; then
         error "unknown --mode '$ONLY_MODE' (not in $BASE_CONFIG)"
         exit 1
     fi
+fi
+
+# Run pre-flight unless explicitly skipped. ~1 minute. Catches wrong commits,
+# stale extracts, broken builds before any rep fires. This is the canonical
+# guard against multi-hour silent-failure campaigns.
+if [ "$SKIP_PREFLIGHT" -eq 0 ]; then
+    step "=== pre-flight check ==="
+    if ! bash "$BENCH_DIR/preflight.sh" --config "$BASE_CONFIG"; then
+        error "pre-flight failed; campaign aborted"
+        error "  (use --skip-preflight to bypass, but ONLY after manually verifying every mode)"
+        exit 1
+    fi
+else
+    warn "Skipping pre-flight (--skip-preflight). Make sure you verified the modes manually."
 fi
 
 # Validate at least one test is selected (catches typos in --only).

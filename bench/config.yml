@@ -91,7 +91,7 @@ modes:
   - name: typedb-core
     description: "Plain typedb (Core, single node) — baseline"
     repo_url:    "git@github.com:farost/typedb.git"
-    commit:      "fa8155577b6be24d4b41c751cd482b9fb1e8adc7"  # farost/typedb master tip
+    commit:      "b46333588c99249811b93ae19795ea3e9b428f39"  # typedb master tip (Fix global log level overshadowing #7845)
     local_archive: ""
     local_repo:    ""
     server_type: typedb
@@ -100,7 +100,7 @@ modes:
   - name: cluster-master-1n
     description: "typedb-cluster master, 1 node — single-replica overhead"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "5f8c44199be4cf791ef9fd25a810d138ac57650e"  # farost/typedb-cluster master tip
+    commit:      "acf44a86a637685716ad4094e61c4c8a6e537a7c"  # typedb-cluster master tip (Update typedb dep #703)
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
@@ -109,7 +109,7 @@ modes:
   - name: cluster-feature-1n
     description: "cluster-support-feature-branch, 1 node — feature branch single-replica"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "99268086992fa46aef515268122b3ca9f45277a7"  # farost/cluster-support-feature-branch tip
+    commit:      "d619e73fc5701251b39fb7f44a7d92b94666930a"  # cluster-support-feature-branch tip (Use tracing logging instead of slog where possible #704)
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
@@ -118,7 +118,7 @@ modes:
   - name: cluster-feature-3n
     description: "cluster-support-feature-branch, 3 nodes — full cluster"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "99268086992fa46aef515268122b3ca9f45277a7"  # same as cluster-feature-1n
+    commit:      "d619e73fc5701251b39fb7f44a7d92b94666930a"  # same as cluster-feature-1n
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
