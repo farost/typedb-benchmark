@@ -1,0 +1,106 @@
+# Single-host topology for smoke-testing. All 4 "machines" map to 127.0.0.1.
+# Distinct port ranges per mode keep them from colliding.
+#
+# Used by examples/run-local-test.sh — see also `make local-smoke`.
+
+[binary]
+source = "local"
+server_bin = "/opt/project/repositories/typedb-cluster/target/release/typedb_server_bin"
+admin_bin  = "/opt/project/repositories/typedb-cluster/target/release/typedb_admin_bin"
+
+[machines.M1]
+hostname = "127.0.0.1"
+[machines.M2]
+hostname = "127.0.0.1"
+[machines.M3]
+hostname = "127.0.0.1"
+[machines.client]
+hostname = "127.0.0.1"
+
+[modes.mode_1n_steady]
+description = "single-node, no chaos (localhost)"
+database = "soak_1n"
+chaos_enabled = false
+[modes.mode_1n_steady.nodes.1]
+machine = "M1"
+grpc_port       = 41729
+clustering_port = 41730
+monitoring_port = 41731
+http_port       = 41732
+
+[modes.mode_3n_steady]
+description = "3-node, no chaos (localhost)"
+database = "soak_3n"
+chaos_enabled = false
+[modes.mode_3n_steady.nodes.1]
+machine = "M1"
+grpc_port       = 42729
+clustering_port = 42730
+monitoring_port = 42731
+http_port       = 42732
+[modes.mode_3n_steady.nodes.2]
+machine = "M2"
+grpc_port       = 43729
+clustering_port = 43730
+monitoring_port = 43731
+http_port       = 43732
+[modes.mode_3n_steady.nodes.3]
+machine = "M3"
+grpc_port       = 44729
+clustering_port = 44730
+monitoring_port = 44731
+http_port       = 44732
+
+[modes.mode_3n_chaos]
+description = "3-node + chaos (localhost)"
+database = "soak_3n_chaos"
+chaos_enabled = true
+[modes.mode_3n_chaos.nodes.1]
+machine = "M1"
+grpc_port       = 45729
+clustering_port = 45730
+monitoring_port = 45731
+http_port       = 45732
+[modes.mode_3n_chaos.nodes.2]
+machine = "M2"
+grpc_port       = 46729
+clustering_port = 46730
+monitoring_port = 46731
+http_port       = 46732
+[modes.mode_3n_chaos.nodes.3]
+machine = "M3"
+grpc_port       = 47729
+clustering_port = 47730
+monitoring_port = 47731
+http_port       = 47732
+
+# Faster chaos cycles for smoke testing (still random within a sane range).
+[chaos.kill]
+min_alive_secs = 20
+max_alive_secs = 60
+min_dead_secs  = 3
+max_dead_secs  = 10
+
+[chaos.network]
+min_clean_secs = 20
+max_clean_secs = 60
+min_dirty_secs = 5
+max_dirty_secs = 15
+interface       = "lo"
+drop_probability = [0.05, 0.30]
+delay_ms         = [20, 200]
+jitter_ms        = [5, 50]
+use_sudo         = true
+
+[disk]
+warn_percent         = 90
+check_interval_secs  = 30
+
+[verification]
+duration_secs        = 300
+min_commits_per_min  = 30
+
+[client]
+diagnostics_poll_secs    = 15
+status_log_every_secs    = 30
+max_reconnect_backoff_ms = 3000

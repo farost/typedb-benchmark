@@ -1,0 +1,144 @@
+# soak-suite topology.
+#
+# 4 machines total: M1, M2, M3 (servers) and the client machine (no server
+# binaries, just runs 3 tmux client sessions).
+#
+# Mode placement:
+#   mode_1n_steady   : 1 node on M1 only (single-node cluster, no chaos)
+#   mode_3n_steady   : 3 nodes (M1=node1, M2=node2, M3=node3), no chaos
+#   mode_3n_chaos    : 3 nodes (M1=node1, M2=node2, M3=node3), chaos enabled
+#
+# Ports per machine are unique across modes — validated at load time.
+
+# ---------------------------------------------------------------------------
+# Binary source.
+#   - "local": point at already-built typedb_server_bin / typedb_admin_bin
+#   - "download": pull an assembled tarball (curl) with optional auth header.
+#     Use ${VAR} substitution in download_auth_header; we read env at load time.
+# ---------------------------------------------------------------------------
+[binary]
+source = "local"
+server_bin = "/opt/project/repositories/typedb-cluster/target/release/typedb_server_bin"
+admin_bin  = "/opt/project/repositories/typedb-cluster/target/release/typedb_admin_bin"
+
+# Example for the download path:
+# source = "download"
+# download_url = "https://dl.cloudsmith.io/<token>/typedb/typedb-server-linux-x86_64-latest.tar.gz"
+# download_cache_dir = "/var/lib/typedb-soak/binary-cache"
+# download_auth_header = "Bearer ${CLOUDSMITH_TOKEN}"
+
+# ---------------------------------------------------------------------------
+# Machines. `hostname` is the address OTHER machines can reach this one on.
+# For local single-host testing use 127.0.0.1; for GCP use the internal DNS.
+# ---------------------------------------------------------------------------
+[machines.M1]
+hostname = "soak-m1.internal"
+[machines.M2]
+hostname = "soak-m2.internal"
+[machines.M3]
+hostname = "soak-m3.internal"
+[machines.client]
+hostname = "soak-client.internal"
+
+# ---------------------------------------------------------------------------
+# Modes. Each mode has a `nodes` map keyed by Raft node id.
+# ---------------------------------------------------------------------------
+
+[modes.mode_1n_steady]
+description = "single-node, no chaos"
+database = "soak_1n"
+chaos_enabled = false
+[modes.mode_1n_steady.nodes.1]
+machine = "M1"
+grpc_port       = 11729
+clustering_port = 11730
+monitoring_port = 11731
+http_port       = 11732
+
+[modes.mode_3n_steady]
+description = "3-node cluster, no chaos"
+database = "soak_3n"
+chaos_enabled = false
+[modes.mode_3n_steady.nodes.1]
+machine = "M1"
+grpc_port       = 21729
+clustering_port = 21730
+monitoring_port = 21731
+http_port       = 21732
+[modes.mode_3n_steady.nodes.2]
+machine = "M2"
+grpc_port       = 21729
+clustering_port = 21730
+monitoring_port = 21731
+http_port       = 21732
+[modes.mode_3n_steady.nodes.3]
+machine = "M3"
+grpc_port       = 21729
+clustering_port = 21730
+monitoring_port = 21731
+http_port       = 21732
+
+[modes.mode_3n_chaos]
+description = "3-node cluster, kills + network chaos"
+database = "soak_3n_chaos"
+chaos_enabled = true
+[modes.mode_3n_chaos.nodes.1]
+machine = "M1"
+grpc_port       = 31729
+clustering_port = 31730
+monitoring_port = 31731
+http_port       = 31732
+[modes.mode_3n_chaos.nodes.2]
+machine = "M2"
+grpc_port       = 31729
+clustering_port = 31730
+monitoring_port = 31731
+http_port       = 31732
+[modes.mode_3n_chaos.nodes.3]
+machine = "M3"
+grpc_port       = 31729
+clustering_port = 31730
+monitoring_port = 31731
+http_port       = 31732
+
+# ---------------------------------------------------------------------------
+# Chaos parameters (apply to any mode where chaos_enabled = true).
+# ---------------------------------------------------------------------------
+[chaos.kill]
+min_alive_secs = 60
+max_alive_secs = 300
+min_dead_secs  = 5
+max_dead_secs  = 30
+
+[chaos.network]
+min_clean_secs = 90
+max_clean_secs = 360
+min_dirty_secs = 10
+max_dirty_secs = 60
+interface       = "eth0"
+drop_probability = [0.05, 0.30]
+delay_ms         = [50, 500]
+jitter_ms        = [10, 100]
+use_sudo         = true
+
+# ---------------------------------------------------------------------------
+# Disk space watchdog: WARN loudly only, never halt.
+# ---------------------------------------------------------------------------
+[disk]
+warn_percent         = 80
+check_interval_secs  = 60
+
+# ---------------------------------------------------------------------------
+# 30-min verification settings.
+# ---------------------------------------------------------------------------
+[verification]
+duration_secs        = 1800
+min_commits_per_min  = 60
+
+# ---------------------------------------------------------------------------
+# Client tuning.
+# ---------------------------------------------------------------------------
+[client]
+diagnostics_poll_secs    = 30
+status_log_every_secs    = 60
+max_reconnect_backoff_ms = 5000
