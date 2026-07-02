@@ -102,7 +102,7 @@ impl Node {
         let clustering = self.clustering_dir().display().to_string();
         let admin = self.admin_socket().display().to_string();
         let log_dir = self.log_dir().display().to_string();
-        vec![
+        let mut args = vec![
             format!("--diagnostics.deployment-id=soak-{}", self.mode_name),
             format!("--server.listen-address=0.0.0.0:{}", a.grpc_port),
             format!("--server.advertise-address={host}:{}", a.grpc_port),
@@ -120,7 +120,15 @@ impl Node {
             "--server.clustering.encryption.enabled=false".to_string(),
             "--development-mode.enabled=true".to_string(),
             format!("--logging.directory={log_dir}"),
-        ]
+        ];
+        // Node id 1 is allowed to bootstrap a new cluster on first boot. The
+        // flag is idempotent on subsequent boots (per the CLI docstring in
+        // typedb-cluster/cluster_server/parameters/cli.rs) — it acts only
+        // when the storage directory is in a pre-bootstrap state.
+        if id == 1 {
+            args.push("--server.clustering.init=true".to_string());
+        }
+        args
     }
 }
 

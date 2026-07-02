@@ -30,7 +30,11 @@ suffix="$(echo "$py_ver" | tr -d '.')"
 target="//python:assemble-pip${suffix}"
 
 step "Building typedb-driver wheel from $repo ($target)"
-( cd "$repo" && bazel build "$target" >&2 )
+# --compilation_mode=opt so the Rust core inside the driver runs at release
+# speed. bazel's default is `fastbuild` (unoptimised debug); with an
+# unoptimised driver the Python client CPU time dominates and masks server
+# throughput differences we're trying to measure.
+( cd "$repo" && bazel build --compilation_mode=opt "$target" >&2 )
 
 # assemble_pip drops the wheel under bazel-bin/python/assemble-pip<suffix>.dist/.
 # The filename includes the version + platform tag — glob for it.

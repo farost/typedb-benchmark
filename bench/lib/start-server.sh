@@ -102,18 +102,18 @@ start_node() {
         args+=( "--server.admin.port=${aport}" )
     fi
 
-    # `--development-mode.enabled=true` is the cluster-feature-branch's way to
-    # disable all reporting/telemetry side-channels. Older builds (typedb-core
-    # at fa8155577, cluster-master at 5f8c4419) don't have this flag; for them
-    # we rely on the three explicit `--diagnostics.*=false` flags above to
-    # achieve the same outcome. Log the state so the user can verify which
-    # path each mode took.
-    if has_flag development-mode.enabled; then
-        args+=( --development-mode.enabled=true )
-        diag_state="reporting=off + development-mode=on"
-    else
-        diag_state="reporting=off (development-mode flag n/a on this build)"
-    fi
+    # `--development-mode.enabled=true` disables telemetry/reporting side-channels
+    # so the benchmark isn't measuring background Sentry / metrics work.
+    #
+    # The flag is `hide = true` in clap (server/parameters/cli.rs:119), so
+    # `has_flag` (which greps --help output) returns false even when the flag
+    # IS accepted. We therefore pass it unconditionally for all cluster/core
+    # server binaries. Two possible states in the underlying server:
+    #   - `--features published` build (bazel opt release): CLI value wins.
+    #   - non-`published` build: `development_mode.enabled |= true` — always on.
+    # Either way, passing the flag is safe and produces the intended behaviour.
+    args+=( --development-mode.enabled=true )
+    diag_state="reporting=off + development-mode=on (unconditional)"
 
     # Clustering flags only if the binary supports them. cluster-master may
     # not yet have the clustering surface — that mode will then behave like
@@ -125,6 +125,15 @@ start_node() {
             "--storage.clustering-directory=${clustering_dir}"
             --server.clustering.encryption.enabled=false
         )
+        # Newer cluster-feature-branch (typedb-cluster 19bb35d9+) requires
+        # `--server.clustering.init=true` on node 1 to allow initial cluster
+        # bootstrap. The flag is idempotent on subsequent boots (acts only
+        # when the storage dir is pre-bootstrap) but only pass it on node 1
+        # per its docstring. Older builds don't have the flag — guard with
+        # has_flag so we don't break them.
+        if [ "$n" = "1" ] && has_flag server.clustering.init; then
+            args+=( --server.clustering.init=true )
+        fi
     fi
 
     log "Starting node $n ($server_type) -> $log_file"

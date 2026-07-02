@@ -88,37 +88,58 @@ benchmark:
 #     This is the "reproducible" path: works on a fresh GCP VM with just
 #     a $GITHUB_TOKEN.
 modes:
-  - name: typedb-core
-    description: "Plain typedb (Core, single node) — baseline"
-    repo_url:    "git@github.com:farost/typedb.git"
-    commit:      "b46333588c99249811b93ae19795ea3e9b428f39"  # typedb master tip (Fix global log level overshadowing #7845)
-    local_archive: ""
-    local_repo:    ""
-    server_type: typedb
-    nodes:       1
-
+  # ----- cluster-master (baseline, existing pin) -----
   - name: cluster-master-1n
     description: "typedb-cluster master, 1 node — single-replica overhead"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "acf44a86a637685716ad4094e61c4c8a6e537a7c"  # typedb-cluster master tip (Update typedb dep #703)
+    commit:      "d351e222b0dfc349278f5008e2cb94eeb1ddf98c"  # typedb-cluster master @ Prepare release 3.12.0-rc2 (#711)
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
     nodes:       1
 
-  - name: cluster-feature-1n
-    description: "cluster-support-feature-branch, 1 node — feature branch single-replica"
+  - name: cluster-master-3n
+    description: "typedb-cluster master, 3 nodes — full cluster on master baseline"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "d619e73fc5701251b39fb7f44a7d92b94666930a"  # cluster-support-feature-branch tip (Use tracing logging instead of slog where possible #704)
+    commit:      "d351e222b0dfc349278f5008e2cb94eeb1ddf98c"  # same as cluster-master-1n
+    local_archive: ""
+    local_repo:    ""
+    server_type: typedb-cluster
+    nodes:       3
+
+  # ----- cluster-support-feature-branch @ 41939ae5 (before the "optimization") -----
+  - name: cluster-feature-45c1a5f2-1n
+    description: "cluster-support-feature-branch @ 41939ae5, 1 node — pre-optimization baseline"
+    repo_url:    "git@github.com:farost/typedb-cluster.git"
+    commit:      "45c1a5f2fc3ddeec81ad959f507a6a26713f4c86"  # Add better syncronization to the Raft log and storage (#713) — pre-optimization baseline (post-rebase)
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
     nodes:       1
 
-  - name: cluster-feature-3n
-    description: "cluster-support-feature-branch, 3 nodes — full cluster"
+  - name: cluster-feature-45c1a5f2-3n
+    description: "cluster-support-feature-branch @ 41939ae5, 3 nodes — pre-optimization baseline"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "d619e73fc5701251b39fb7f44a7d92b94666930a"  # same as cluster-feature-1n
+    commit:      "45c1a5f2fc3ddeec81ad959f507a6a26713f4c86"  # same as cluster-feature-45c1a5f2-1n
+    local_archive: ""
+    local_repo:    ""
+    server_type: typedb-cluster
+    nodes:       3
+
+  # ----- cluster-support-feature-branch @ ec08de67 (latest, WITH the optimization) -----
+  - name: cluster-feature-2b607ca0-1n
+    description: "cluster-support-feature-branch @ ec08de67, 1 node — with new optimization"
+    repo_url:    "git@github.com:farost/typedb-cluster.git"
+    commit:      "2b607ca0a953f976d178ce24055630db17981787"  # Update lock file after rebase — latest, WITH the "optimize apply path" change (post-rebase)
+    local_archive: ""
+    local_repo:    ""
+    server_type: typedb-cluster
+    nodes:       1
+
+  - name: cluster-feature-2b607ca0-3n
+    description: "cluster-support-feature-branch @ ec08de67, 3 nodes — with new optimization"
+    repo_url:    "git@github.com:farost/typedb-cluster.git"
+    commit:      "2b607ca0a953f976d178ce24055630db17981787"  # same as cluster-feature-2b607ca0-1n
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster

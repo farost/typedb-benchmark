@@ -122,10 +122,17 @@ probe_binary() {
             "--storage.clustering-directory=$dir/clustering"
             --server.clustering.encryption.enabled=false
         )
+        # Allow the single-node probe to bootstrap when the binary is on
+        # a build that requires the new init flag (cluster-feature-branch
+        # 19bb35d9+). Older builds don't have it — guard with has_flag.
+        if has_flag server.clustering.init; then
+            args+=(--server.clustering.init=true)
+        fi
     fi
-    if has_flag development-mode.enabled; then
-        args+=(--development-mode.enabled=true)
-    fi
+    # `--development-mode.enabled` is `hide = true` in clap so --help doesn't
+    # list it, but the flag IS accepted. Pass unconditionally so preflight
+    # exercises the same path as the real bench runs.
+    args+=(--development-mode.enabled=true)
 
     "$binary" "${args[@]}" > "$BOOT_LOG" 2>&1 &
     local pid=$!
