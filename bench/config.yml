@@ -92,7 +92,7 @@ modes:
   - name: cluster-master-1n
     description: "typedb-cluster master, 1 node — single-replica overhead"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "d351e222b0dfc349278f5008e2cb94eeb1ddf98c"  # typedb-cluster master @ Prepare release 3.12.0-rc2 (#711)
+    commit:      "b3338c31b6efd31b8b99656c61fb64f069ba8fd3"  # typedb-cluster master @ Update typedb version
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
@@ -101,26 +101,26 @@ modes:
   - name: cluster-master-3n
     description: "typedb-cluster master, 3 nodes — full cluster on master baseline"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "d351e222b0dfc349278f5008e2cb94eeb1ddf98c"  # same as cluster-master-1n
+    commit:      "b3338c31b6efd31b8b99656c61fb64f069ba8fd3"  # same as cluster-master-1n
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
     nodes:       3
 
-  # ----- cluster-support-feature-branch @ 41939ae5 (before the "optimization") -----
-  - name: cluster-feature-45c1a5f2-1n
-    description: "cluster-support-feature-branch @ 41939ae5, 1 node — pre-optimization baseline"
+  # ----- cluster-support-feature-branch @ ec08de67 (the "before" for the last optimization) -----
+  - name: cluster-feature-ec08de67-1n
+    description: "cluster-support-feature-branch @ ec08de67, 1 node — pre-latest, the 'before' for the last optimization"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "45c1a5f2fc3ddeec81ad959f507a6a26713f4c86"  # Add better syncronization to the Raft log and storage (#713) — pre-optimization baseline (post-rebase)
+    commit:      "ec08de6753df201322e6ec73d7377a231a06301d"  # Stabilize node statuses and optimize apply path (#714) — pre-latest, the "before" for the last optimization
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
     nodes:       1
 
-  - name: cluster-feature-45c1a5f2-3n
-    description: "cluster-support-feature-branch @ 41939ae5, 3 nodes — pre-optimization baseline"
+  - name: cluster-feature-ec08de67-3n
+    description: "cluster-support-feature-branch @ ec08de67, 3 nodes — pre-latest, the 'before' for the last optimization"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "45c1a5f2fc3ddeec81ad959f507a6a26713f4c86"  # same as cluster-feature-45c1a5f2-1n
+    commit:      "ec08de6753df201322e6ec73d7377a231a06301d"  # same as cluster-feature-ec08de67-1n
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
