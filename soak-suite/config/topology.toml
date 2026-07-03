@@ -105,14 +105,14 @@ http_port       = 31732
 # Chaos parameters (apply to any mode where chaos_enabled = true).
 # ---------------------------------------------------------------------------
 [chaos.kill]
-min_alive_secs = 60
-max_alive_secs = 300
+min_alive_secs = 600
+max_alive_secs = 1200
 min_dead_secs  = 5
 max_dead_secs  = 30
 
 [chaos.network]
-min_clean_secs = 90
-max_clean_secs = 360
+min_clean_secs = 600
+max_clean_secs = 1200
 min_dirty_secs = 10
 max_dirty_secs = 60
 interface       = "eth0"
