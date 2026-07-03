@@ -244,17 +244,25 @@ pub fn register_peer(
 }
 
 pub fn wait_for_primary(admin_bin: &Path, via_socket: &Path, timeout: Duration) -> Result<()> {
-    // The admin output is a table like:
-    //   id | address | role    | term | status
-    //   1  | ...     | primary | ...  | available
-    // We match the data-row pattern `| primary |` to avoid false-positives
-    // on a header column literally named "primary".
+    // The admin output is a padded table like:
+    //   id | address       | role      | term | status
+    //   1  | soak-m1:31730 | primary   | 1    | available
+    //   2  | soak-m2:31730 | secondary | 1    | available
+    // The role column is padded to fit the widest name — `primary` in a
+    // 3-node cluster shows as `primary   ` (trailing spaces) because
+    // `secondary` is longer. The previous pattern `| primary |` (single
+    // trailing space) only matched when the cluster had no `secondary`
+    // roles yet. Use a tokenised check: parse each row's fields and look
+    // for one whose 3rd column is exactly `primary`.
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
-        if let Ok(status) = run_admin(admin_bin, via_socket, "servers status")
-            && status.contains("| primary |")
-        {
-            return Ok(());
+        if let Ok(status) = run_admin(admin_bin, via_socket, "servers status") {
+            let elected = status.lines().any(|line| {
+                line.split('|').map(|c| c.trim()).any(|c| c == "primary")
+            });
+            if elected {
+                return Ok(());
+            }
         }
         thread::sleep(Duration::from_millis(500));
     }
