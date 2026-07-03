@@ -36,6 +36,7 @@ tmp/
 # Compiled files
 target/
 bin/
+!soak-suite/src/bin/
 dist/
 
 # NPM

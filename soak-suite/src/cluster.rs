@@ -44,7 +44,11 @@ impl Node {
         self.work_dir.join("logs")
     }
     pub fn admin_socket(&self) -> PathBuf {
-        self.data_dir().join("admin.sock")
+        // Admin socket goes under /tmp/ so the total path stays comfortably under
+        // the Linux sun_path 108-byte limit (feature-branch enforces SRO35). A
+        // typical workdir like /var/lib/typedb-soak/M1/mode_3n_chaos/node1 pushed
+        // the socket path close to the ceiling on longer hostnames.
+        PathBuf::from(format!("/tmp/tdb-soak-{}-n{}.sock", self.mode_name, self.node_id))
     }
     pub fn server_stdout_log(&self) -> PathBuf {
         self.work_dir.join("server.log")
