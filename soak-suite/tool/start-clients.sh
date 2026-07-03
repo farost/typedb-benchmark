@@ -28,8 +28,12 @@ done
 
 command -v tmux >/dev/null || { echo "tmux is required" >&2; exit 1; }
 
-(cd "$SOAK_DIR" && cargo build --release --bin client)
 CLIENT_BIN="$SOAK_DIR/target/release/client"
+if [ ! -x "$CLIENT_BIN" ]; then
+    echo "[soak] building client..."
+    source "$HOME/.cargo/env" 2>/dev/null || true
+    (cd "$SOAK_DIR" && cargo build --release --bin client)
+fi
 
 start_session() {
   local session="$1"; shift

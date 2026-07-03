@@ -18,10 +18,16 @@ SOAK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 mkdir -p "$WORKDIR"
 echo "[soak] machine=$MACHINE topology=$TOPOLOGY workdir=$WORKDIR"
-echo "[soak] building runner if needed..."
-(cd "$SOAK_DIR" && cargo build --release --bin runner)
+RUNNER="$SOAK_DIR/target/release/runner"
+if [ -x "$RUNNER" ]; then
+    echo "[soak] using pre-built runner at $RUNNER"
+else
+    echo "[soak] building runner..."
+    source "$HOME/.cargo/env" 2>/dev/null || true
+    (cd "$SOAK_DIR" && cargo build --release --bin runner)
+fi
 
-exec "$SOAK_DIR/target/release/runner" \
+exec "$RUNNER" \
   --config "$TOPOLOGY" \
   --machine "$MACHINE" \
   --workdir "$WORKDIR"
