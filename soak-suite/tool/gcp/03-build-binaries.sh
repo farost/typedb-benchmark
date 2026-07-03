@@ -45,7 +45,10 @@ echo READY
 # command but not through our logs (both invocations of gc_ssh below
 # capture output; we only surface the last line).
 CMD="${SAFE_CMD//__TOKEN__/$GITHUB_TOKEN}"
-last_line="$(gc_ssh "${SERVERS[0]}" "$CMD" | tail -1)"
+LOGFILE=/tmp/m1-build.log
+echo "  streaming M1 build output here; full log at $LOGFILE"
+gc_ssh "${SERVERS[0]}" "$CMD" 2>&1 | tee "$LOGFILE"
+last_line="$(tail -1 "$LOGFILE")"
 if [ "$last_line" != "READY" ]; then
     error "M1 build did not report READY (last line: $last_line)"
     exit 1

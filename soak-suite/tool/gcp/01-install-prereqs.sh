@@ -29,7 +29,7 @@ server_prereqs() {
             sudo chmod 440 /etc/sudoers.d/typedb-soak
         fi
         sudo -n iptables -L OUTPUT -n >/dev/null
-        IFACE_=$(ip -o -4 route show default | awk "{print \$5}" | head -1); sudo -n tc qdisc show dev "$IFACE_" >/dev/null
+        IFACE_=\$(ip -o -4 route show default | awk '{print \$5}' | head -1); sudo -n tc qdisc show dev \$IFACE_ >/dev/null
         echo PREFLIGHT_OK
     " | tail -3
 }
