@@ -17,6 +17,8 @@ configure_one() {
             -e "s|hostname = \"soak-m3.internal\"|hostname = \"soak-m3\"|" \
             -e "s|hostname = \"soak-client.internal\"|hostname = \"soak-client\"|" \
             config/topology.toml && \
+        IFACE_=$(ip -o -4 route show default | awk "{print \$5}" | head -1) && \
+        sed -i "s|^interface\s*=.*|interface = \"$IFACE_\"|" config/topology.toml && \
         grep -c -E "^hostname|^server_bin|^admin_bin" config/topology.toml
     ' | tail -1
 }
