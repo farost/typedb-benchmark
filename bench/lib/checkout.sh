@@ -91,3 +91,30 @@ if [ "$actual" != "$commit" ]; then
 fi
 
 log "  at $(git -C "$dest" log -1 --format='%h %s')"
+
+# ---------------------------------------------------------------------------
+# Pin transitive bzlmod deps to the versions MODULE.bazel declares. Without
+# these, bzlmod resolves protobuf/rules_java/etc. UPWARD to newer versions
+# whose bzl surfaces don't line up (typical symptom on the newer feature-
+# branch commits: `no such package '@@abseil-cpp+//absl/log'` because
+# protobuf@35 references absl/log that the transitively-resolved older
+# abseil doesn't have).
+#
+# Idempotent — checks for our marker before appending.
+# ---------------------------------------------------------------------------
+MODULE_FILE="$dest/MODULE.bazel"
+BENCH_PIN_MARKER="# ---- bench harness: single_version_override pins ----"
+if [ -f "$MODULE_FILE" ] && ! grep -qF "$BENCH_PIN_MARKER" "$MODULE_FILE"; then
+    log "  appending single_version_override pins to $MODULE_FILE"
+    cat >> "$MODULE_FILE" <<PINS
+
+$BENCH_PIN_MARKER
+single_version_override(module_name = "protobuf", version = "29.3")
+single_version_override(module_name = "rules_java", version = "8.6.2")
+single_version_override(module_name = "platforms", version = "0.0.10")
+single_version_override(module_name = "bazel_skylib", version = "1.7.1")
+single_version_override(module_name = "rules_jvm_external", version = "6.6")
+single_version_override(module_name = "rules_python", version = "1.0.0")
+single_version_override(module_name = "rules_kotlin", version = "2.0.0")
+PINS
+fi
