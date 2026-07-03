@@ -10,8 +10,8 @@ configure_one() {
     gc_ssh "$vm" '
         cd ~/typedb-benchmark/soak-suite && \
         sed -i \
-            -e "s|server_bin = .*|server_bin = \"$HOME/bin/typedb_server_bin\"|" \
-            -e "s|admin_bin = .*|admin_bin = \"$HOME/bin/typedb_admin_bin\"|" \
+            -e "s|^server_bin[[:space:]]*=.*|server_bin = \"$HOME/bin/typedb_server_bin\"|" \
+            -e "s|^admin_bin[[:space:]]*=.*|admin_bin = \"$HOME/bin/typedb_admin_bin\"|" \
             -e "s|hostname = \"soak-m1.internal\"|hostname = \"soak-m1\"|" \
             -e "s|hostname = \"soak-m2.internal\"|hostname = \"soak-m2\"|" \
             -e "s|hostname = \"soak-m3.internal\"|hostname = \"soak-m3\"|" \
