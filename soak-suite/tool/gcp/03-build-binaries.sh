@@ -34,10 +34,13 @@ else
     source ~/.cargo/env
     cargo build --release -p typedb_server_bin -p typedb_admin_bin
     cp target/release/typedb_server_bin target/release/typedb_admin_bin ~/bin/
-    cp cluster_server/config.yml ~/bin/config.yml
     echo \"\$actual\" > \"\$marker\"
     echo BUILD_DONE
 fi
+# Always refresh config.yml — runs on both cache-hit and rebuild paths.
+# Without this, a second invocation (cache-hit) leaves ~/bin/config.yml stale
+# or missing, and the server panics at startup with '[CFG1] Error reading config file'.
+cp cluster_server/config.yml ~/bin/config.yml
 tar czf /tmp/typedb-bins.tar.gz -C ~/bin typedb_server_bin typedb_admin_bin config.yml .typedb-built-from
 echo READY
 "
