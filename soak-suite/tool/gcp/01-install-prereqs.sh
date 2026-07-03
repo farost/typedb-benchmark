@@ -17,7 +17,7 @@ server_prereqs() {
     gc_ssh "$vm" "
         set -e
         sudo apt-get update -qq
-        sudo apt-get install -y -qq build-essential pkg-config libssl-dev iptables iproute2 tmux jq git curl python3 python3-pip libclang-dev clang
+        sudo apt-get install -y -qq build-essential pkg-config libssl-dev iptables iproute2 tmux jq git curl python3 python3-pip libclang-dev clang protobuf-compiler
         if [ ! -f \$HOME/.cargo/env ]; then
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.90.0 --profile minimal >/dev/null
         fi
@@ -39,7 +39,7 @@ client_prereqs() {
     gc_ssh "$vm" "
         set -e
         sudo apt-get update -qq
-        sudo apt-get install -y -qq build-essential pkg-config libssl-dev tmux jq git curl python3 python3-pip libclang-dev clang
+        sudo apt-get install -y -qq build-essential pkg-config libssl-dev tmux jq git curl python3 python3-pip libclang-dev clang protobuf-compiler
         if [ ! -f \$HOME/.cargo/env ]; then
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.90.0 --profile minimal >/dev/null
         fi
