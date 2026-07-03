@@ -34,10 +34,11 @@ else
     source ~/.cargo/env
     cargo build --release -p typedb_server_bin -p typedb_admin_bin
     cp target/release/typedb_server_bin target/release/typedb_admin_bin ~/bin/
+    cp cluster_server/config.yml ~/bin/config.yml
     echo \"\$actual\" > \"\$marker\"
     echo BUILD_DONE
 fi
-tar czf /tmp/typedb-bins.tar.gz -C ~/bin typedb_server_bin typedb_admin_bin .typedb-built-from
+tar czf /tmp/typedb-bins.tar.gz -C ~/bin typedb_server_bin typedb_admin_bin config.yml .typedb-built-from
 echo READY
 "
 
