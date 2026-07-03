@@ -10,7 +10,7 @@
 # Idempotent — if ~/bin/typedb_server_bin already exists AND its git rev matches
 # the tag, skips the rebuild.
 source "$(dirname "$0")/lib.sh"
-require_env PROJECT ZONE GITHUB_TOKEN
+require_env PROJECT ZONE GITHUB_TOKEN GITHUB_USER
 
 : "${TYPEDB_REPO:=typedb/typedb-cluster}"
 
@@ -20,7 +20,7 @@ step "Building typedb $TYPEDB_TAG on M1"
 SAFE_CMD="
 set -e
 if [ ! -d ~/typedb-cluster/.git ]; then
-    git clone --quiet https://x-access-token:__TOKEN__@github.com/${TYPEDB_REPO}.git ~/typedb-cluster
+    git clone --quiet https://__USER__:__TOKEN__@github.com/${TYPEDB_REPO}.git ~/typedb-cluster
 fi
 cd ~/typedb-cluster
 git fetch --tags --quiet origin '$TYPEDB_TAG' 2>/dev/null || git fetch --tags --quiet origin
@@ -44,7 +44,7 @@ echo READY
 # Substitute token client-side; the remote sees the literal token in the
 # command but not through our logs (both invocations of gc_ssh below
 # capture output; we only surface the last line).
-CMD="${SAFE_CMD//__TOKEN__/$GITHUB_TOKEN}"
+CMD="${SAFE_CMD//__USER__/$GITHUB_USER}"; CMD="${CMD//__TOKEN__/$GITHUB_TOKEN}"
 LOGFILE=/tmp/m1-build.log
 echo "  streaming M1 build output here; full log at $LOGFILE"
 gc_ssh "${SERVERS[0]}" "$CMD" 2>&1 | tee "$LOGFILE"
