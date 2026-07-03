@@ -97,7 +97,7 @@ start_node() {
 
     # Admin transport: prefer UDS where supported; fall back to TCP port.
     if has_flag server.admin.socket-path; then
-        args+=( "--server.admin.socket-path=${data_dir}/admin.sock" )
+        args+=( "--server.admin.socket-path=/tmp/tdb-${mode_name}-n${n}.sock" )
     else
         args+=( "--server.admin.port=${aport}" )
     fi
@@ -145,7 +145,7 @@ start_node() {
 
     wait_for_port "$gport" 60 || { tail -20 "$log_file" >&2; return 1; }
     if has_flag server.admin.socket-path; then
-        wait_for_path "${data_dir}/admin.sock" 60 || return 1
+        wait_for_path "/tmp/tdb-${mode_name}-n${n}.sock" 60 || return 1
     fi
 }
 
@@ -158,7 +158,7 @@ done
 
 # Multi-node: register peers via admin RPC, then wait for primary election.
 if [ "$nodes" -gt 1 ]; then
-    local_sock="$run_dir/1/server/data/admin.sock"
+    local_sock="/tmp/tdb-${mode_name}-n1.sock"
 
     # The admin socket file appears before the admin service is ready to
     # accept RPCs — the first call after socket creation returns
