@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rewrite the `modes:` block of bench/config.yml for a master-vs-release
-# campaign: cluster-master-{1n,3n} at one pin, cluster-beta2-{1n,3n} at the
-# release pin. Everything above `modes:` is left untouched.
+# campaign: cluster-master-1n at one pin (master supports single-node only —
+# no 3n mode), cluster-beta2-{1n,3n} at the release pin. Everything above `modes:` is left untouched.
 #
 # Pins must be full 40-char commit SHAs (checkout.sh asserts HEAD equality,
 # so tags won't pass). Both commits must be reachable on the configured repo
@@ -52,15 +52,6 @@ cat >> "$TMP" <<EOF
     server_type: typedb-cluster
     nodes:       1
 
-  - name: cluster-master-3n
-    description: "typedb-cluster master, 3 nodes — full cluster on master baseline"
-    repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "$MASTER_SHA"
-    local_archive: ""
-    local_repo:    ""
-    server_type: typedb-cluster
-    nodes:       3
-
   # ----- 3.12.0-beta-2 (Tighten recovery: fix maybe_replay and application queue) -----
   - name: cluster-beta2-1n
     description: "typedb-cluster 3.12.0-beta-2, 1 node"
@@ -82,8 +73,8 @@ cat >> "$TMP" <<EOF
 EOF
 
 mv "$TMP" "$CONFIG"
-echo "pinned: cluster-master-{1n,3n} -> $MASTER_SHA"
-echo "pinned: cluster-beta2-{1n,3n}  -> $BETA2_SHA"
+echo "pinned: cluster-master-1n        -> $MASTER_SHA"
+echo "pinned: cluster-beta2-{1n,3n}   -> $BETA2_SHA"
 echo
 echo "Review:    git diff $(basename "$(dirname "$CONFIG")")/config.yml"
 echo "Preflight: bench/preflight.sh   # verify each pin's commit subject before any reps"
