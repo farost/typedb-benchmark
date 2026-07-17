@@ -24,7 +24,7 @@ for M in "${SERVERS[@]}"; do
     gc_ssh "$M" '
         LABEL='"$LABEL"'
         echo "-- typedb server processes --"
-        n=$(pgrep -cf typedb_server_bin 2>/dev/null)
+        n=$(pgrep -cf "[t]ypedb_server_bin" 2>/dev/null)
         echo "running: ${n:-0} (expected: M1=3, M2/M3=2 for the standard 3-mode topology)"
         echo "-- per-mode log markers --"
         found_any=0

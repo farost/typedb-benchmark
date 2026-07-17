@@ -40,7 +40,7 @@ step "1/4 Final health record → $HEALTH_FILE"
         gc_ssh "$M" '
             LABEL='"$LABEL"'
             echo "-- typedb processes --"
-            pgrep -laf typedb_server_bin || echo "(none)"
+            pgrep -laf "[t]ypedb_server_bin" || echo "(none)"
             echo "-- panic markers per mode --"
             for f in /var/lib/typedb-soak/$LABEL/mode_*/node*/server.log; do
                 [ -f "$f" ] || continue
@@ -55,9 +55,9 @@ ok "health record written: $HEALTH_FILE"
 
 step "2/4 Archiving client workdir on $CLIENT"
 gc_ssh "$CLIENT" "
-    mkdir -p /var/lib/typedb-soak-archives
-    tar czf /var/lib/typedb-soak-archives/client-$TS.tar.gz -C /var/lib/typedb-soak client 2>/dev/null || true
-    ls -lh /var/lib/typedb-soak-archives/client-$TS.tar.gz
+    mkdir -p /var/lib/typedb-soak/archive-$TS
+    tar czf /var/lib/typedb-soak/archive-$TS/client-workdir.tar.gz -C /var/lib/typedb-soak client
+    ls -lh /var/lib/typedb-soak/archive-$TS/client-workdir.tar.gz
 " | tail -1
 
 step "3/4 Stopping clients, reporters, runners, servers"
@@ -73,14 +73,14 @@ stop_server() {
     local vm="$1"
     gc_ssh "$vm" '
         tmux has-session -t soak-runner 2>/dev/null && tmux kill-session -t soak-runner
-        pkill -f typedb_server_bin 2>/dev/null
-        pkill -f typedb_admin_bin 2>/dev/null
+        pkill -f "[t]ypedb_server_bin" 2>/dev/null
+        pkill -f "[t]ypedb_admin_bin" 2>/dev/null
         sleep 3
-        if pgrep -f typedb_server_bin >/dev/null; then
-            pkill -9 -f typedb_server_bin
+        if pgrep -f "[t]ypedb_server_bin" >/dev/null; then
+            pkill -9 -f "[t]ypedb_server_bin"
             sleep 2
         fi
-        if pgrep -f typedb_server_bin >/dev/null; then
+        if pgrep -f "[t]ypedb_server_bin" >/dev/null; then
             echo STILL_RUNNING
         else
             echo STOPPED

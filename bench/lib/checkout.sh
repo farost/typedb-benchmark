@@ -62,7 +62,10 @@ if [ -d "$dest/.git" ]; then
             exit 1
         fi
     fi
-    if ! co_err="$(git -C "$dest" checkout --quiet "$commit" 2>&1)"; then
+    # --force: the bzlmod pinning step below edits MODULE.bazel in the working
+    # tree on every checkout, so a reused checkout is always dirty. Discard
+    # that edit (it is re-applied for the new commit right after).
+    if ! co_err="$(git -C "$dest" checkout --quiet --force "$commit" 2>&1)"; then
         error "could not checkout $commit in $dest: $co_err"
         error "  commit may not exist on the remote, or fetch was incomplete"
         exit 1

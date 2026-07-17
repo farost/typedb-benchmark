@@ -1,0 +1,69 @@
+=== soak final health record @ 20260717T161859Z ===
+
+===== client health-snapshot =====
+=== soak health snapshot @ 2026-07-17T16:19:03Z ===
+  workdir: /var/lib/typedb-soak/client
+
+--- mode_1n_steady ---
+  started            : 2026-07-03T23:58:43.832118135Z
+  last_ok_at         : 2026-07-17T16:12:51.217685526Z
+  expected           : 1114180
+  commits_ok         : 1114180  (~0.9 ops/s over run)
+  commits_err        : 0
+  verifies_ok        : 1114179
+  verifies_err       : 0
+  reconciliations    : 0
+  failures           : none
+
+--- mode_3n_chaos ---
+  started            : 2026-07-03T23:58:43.867798788Z
+  last_ok_at         : 2026-07-04T07:15:47.589340190Z
+  expected           : 40711
+  commits_ok         : 40708  (~0.0 ops/s over run)
+  commits_err        : 9
+  verifies_ok        : 40704
+  verifies_err       : 4
+  reconciliations    : 3
+  failures           : none
+
+--- mode_3n_steady ---
+  started            : 2026-07-03T23:58:43.847208761Z
+  last_ok_at         : 2026-07-17T16:12:50.757244962Z
+  expected           : 1118663
+  commits_ok         : 1118663  (~0.9 ops/s over run)
+  commits_err        : 0
+  verifies_ok        : 1118662
+  verifies_err       : 0
+  reconciliations    : 0
+  failures           : none
+
+=== end snapshot ===
+
+===== soak-m1 =====
+-- typedb processes --
+(none)
+-- panic markers per mode --
+/var/lib/typedb-soak/M1/mode_1n_steady/node1/server.log: 0 panics, 0 local-failure warns
+/var/lib/typedb-soak/M1/mode_3n_chaos/node1/server.log: 2524 panics, 0 local-failure warns
+/var/lib/typedb-soak/M1/mode_3n_steady/node1/server.log: 0 panics, 0 local-failure warns
+-- disk --
+/dev/sda1        99G   11G   84G  12% /
+
+===== soak-m2 =====
+-- typedb processes --
+24738 /home/georgii/bin/typedb_server_bin --diagnostics.deployment-id=soak-mode_3n_steady --server.listen-address=0.0.0.0:21729 --server.advertise-address=soak-m2:21729 --server.http.enabled=true --server.http.listen-address=0.0.0.0:21732 --server.http.advertise-address=http://soak-m2:21732 --server.admin.enabled=true --server.admin.socket-path=/tmp/tdb-soak-mode_3n_steady-n2.sock --server.clustering.id=2 --server.clustering.address=soak-m2:21730 --storage.data-directory=/var/lib/typedb-soak/M2/mode_3n_steady/node2/data --storage.clustering-directory=/var/lib/typedb-soak/M2/mode_3n_steady/node2/clustering --diagnostics.monitoring.port=21731 --server.encryption.enabled=false --server.clustering.encryption.enabled=false --development-mode.enabled=true --logging.directory=/var/lib/typedb-soak/M2/mode_3n_steady/node2/logs
+-- panic markers per mode --
+/var/lib/typedb-soak/M2/mode_3n_chaos/node2/server.log: 2504 panics, 0 local-failure warns
+/var/lib/typedb-soak/M2/mode_3n_steady/node2/server.log: 0 panics, 0 local-failure warns
+-- disk --
+/dev/sda1        99G  7.3G   87G   8% /
+
+===== soak-m3 =====
+-- typedb processes --
+22992 /home/georgii/bin/typedb_server_bin --diagnostics.deployment-id=soak-mode_3n_steady --server.listen-address=0.0.0.0:21729 --server.advertise-address=soak-m3:21729 --server.http.enabled=true --server.http.listen-address=0.0.0.0:21732 --server.http.advertise-address=http://soak-m3:21732 --server.admin.enabled=true --server.admin.socket-path=/tmp/tdb-soak-mode_3n_steady-n3.sock --server.clustering.id=3 --server.clustering.address=soak-m3:21730 --storage.data-directory=/var/lib/typedb-soak/M3/mode_3n_steady/node3/data --storage.clustering-directory=/var/lib/typedb-soak/M3/mode_3n_steady/node3/clustering --diagnostics.monitoring.port=21731 --server.encryption.enabled=false --server.clustering.encryption.enabled=false --development-mode.enabled=true --logging.directory=/var/lib/typedb-soak/M3/mode_3n_steady/node3/logs
+677114 /home/georgii/bin/typedb_server_bin --diagnostics.deployment-id=soak-mode_3n_chaos --server.listen-address=0.0.0.0:31729 --server.advertise-address=soak-m3:31729 --server.http.enabled=true --server.http.listen-address=0.0.0.0:31732 --server.http.advertise-address=http://soak-m3:31732 --server.admin.enabled=true --server.admin.socket-path=/tmp/tdb-soak-mode_3n_chaos-n3.sock --server.clustering.id=3 --server.clustering.address=soak-m3:31730 --storage.data-directory=/var/lib/typedb-soak/M3/mode_3n_chaos/node3/data --storage.clustering-directory=/var/lib/typedb-soak/M3/mode_3n_chaos/node3/clustering --diagnostics.monitoring.port=31731 --server.encryption.enabled=false --server.clustering.encryption.enabled=false --development-mode.enabled=true --logging.directory=/var/lib/typedb-soak/M3/mode_3n_chaos/node3/logs
+-- panic markers per mode --
+/var/lib/typedb-soak/M3/mode_3n_chaos/node3/server.log: 0 panics, 0 local-failure warns
+/var/lib/typedb-soak/M3/mode_3n_steady/node3/server.log: 0 panics, 0 local-failure warns
+-- disk --
+/dev/sda1        99G  8.1G   87G   9% /
