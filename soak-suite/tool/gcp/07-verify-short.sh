@@ -16,7 +16,7 @@ gc_ssh "$CLIENT" "
         echo SKIP_ALREADY_RUNNING
         exit 0
     fi
-    tmux new-session -d -s soak-verify \"cd ~/typedb-benchmark/soak-suite && DURATION=$DURATION tool/run-verify-short.sh 2>&1 | tee /var/lib/typedb-soak/reports/verify-short.stdout\"
+    tmux new-session -d -s soak-verify \"mkdir -p /var/lib/typedb-soak/reports && cd ~/typedb-benchmark/soak-suite && DURATION=$DURATION tool/run-verify-short.sh 2>&1 | tee /var/lib/typedb-soak/reports/verify-short.stdout\"
     echo STARTED
 " | tail -1
 
