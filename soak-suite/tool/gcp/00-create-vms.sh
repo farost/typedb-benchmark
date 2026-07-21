@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Create the 4 VMs + firewall rule. Sizing controlled by env:
 #   SIZING=verification  — n2-standard-4 servers, e2-standard-2 client, boot disk only (cheap smoke)
-#   SIZING=long-soak     — n2-standard-8 servers with 500 GB pd-ssd data disks, e2-standard-4 client
+#   SIZING=long-soak     — n2-standard-8 servers with pd-ssd data disks (DATA_SIZE, default 50 GB), e2-standard-4 client
 #
 # Usage:
 #   PROJECT=my-proj ZONE=us-central1-a SIZING=verification tool/gcp/00-create-vms.sh
@@ -31,7 +31,10 @@ case "$SIZING" in
         CLIENT_TYPE=e2-standard-4
         CLIENT_BOOT=100GB
         ATTACH_DATA=1
-        DATA_SIZE=500GB
+        # Data disk is pd-ssd and dominates the bill. A 3-mode soak writes
+        # ~0.5 GB/day, so the default 50 GB is ~100 days of headroom. Override
+        # with DATA_SIZE=... for a longer/heavier run.
+        DATA_SIZE="${DATA_SIZE:-50GB}"
         ;;
     *)
         error "unknown SIZING='$SIZING' (want: verification | long-soak)"
@@ -67,7 +70,7 @@ for M in "${SERVERS[@]}"; do
         fi
         # Attach if not already attached.
         already_attached="$(gcloud compute instances describe "$M" --project="$PROJECT" --zone="$ZONE" \
-            --format='value(disks[].deviceName)' 2>/dev/null | grep -c "$DISK_NAME" || true)"
+            --format='value(disks[].source)' 2>/dev/null | grep -Fc "/$DISK_NAME" || true)"
         if [ "$already_attached" -eq 0 ]; then
             log "$M: attaching $DISK_NAME"
             gcloud compute instances attach-disk "$M" \

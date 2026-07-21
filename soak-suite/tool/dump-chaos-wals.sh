@@ -24,8 +24,10 @@ ANALYZE=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --read-wal) READ_WAL_BIN="$2"; shift 2 ;;
-    --db) DB="$2"; shift 2 ;;
+    --read-wal) [[ $# -ge 2 ]] || { echo "--read-wal needs a PATH argument" >&2; exit 2; }
+                READ_WAL_BIN="$2"; shift 2 ;;
+    --db) [[ $# -ge 2 ]] || { echo "--db needs an argument" >&2; exit 2; }
+          DB="$2"; shift 2 ;;
     --no-analyze) ANALYZE=0; shift ;;
     -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
     *)
