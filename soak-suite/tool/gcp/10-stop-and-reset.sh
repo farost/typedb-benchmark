@@ -95,6 +95,9 @@ for M in "${SERVERS[@]}"; do
         exit 1
     fi
     ok "$M: stopped"
+    # Killing the runner above strands any in-progress NET-CHAOS impairment;
+    # clear it so the chaos clustering port isn't blocked on the next deploy.
+    clean_net_chaos "$M" | sed "s/^/  $M: /" || true
 done
 
 step "4/4 Moving workdirs aside (archive-$TS)"

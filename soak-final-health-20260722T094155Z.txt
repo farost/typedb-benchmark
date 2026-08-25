@@ -1,0 +1,34 @@
+=== soak final health record @ 20260722T094155Z ===
+
+===== client health-snapshot =====
+ERROR: client workdir not found: /var/lib/typedb-soak/client
+
+===== soak-m1 =====
+-- typedb processes --
+(none)
+-- panic markers per mode --
+/var/lib/typedb-soak/M1/mode_1n_steady/node1/server.log: 0 panics, 0 local-failure warns
+/var/lib/typedb-soak/M1/mode_3n_chaos/node1/server.log: 0 panics, 0 local-failure warns
+/var/lib/typedb-soak/M1/mode_3n_steady/node1/server.log: 0 panics, 0 local-failure warns
+-- disk --
+/dev/sdb         49G  857M   46G   2% /var/lib/typedb-soak
+
+===== soak-m2 =====
+-- typedb processes --
+89447 /home/georgii/bin/typedb_server_bin --diagnostics.deployment-id=soak-mode_3n_steady --server.listen-address=0.0.0.0:21729 --server.advertise-address=soak-m2:21729 --server.http.enabled=true --server.http.listen-address=0.0.0.0:21732 --server.http.advertise-address=http://soak-m2:21732 --server.admin.enabled=true --server.admin.socket-path=/tmp/tdb-soak-mode_3n_steady-n2.sock --server.clustering.id=2 --server.clustering.address=soak-m2:21730 --storage.data-directory=/var/lib/typedb-soak/M2/mode_3n_steady/node2/data --storage.clustering-directory=/var/lib/typedb-soak/M2/mode_3n_steady/node2/clustering --diagnostics.monitoring.port=21731 --server.encryption.enabled=false --server.clustering.encryption.enabled=false --development-mode.enabled=true --logging.directory=/var/lib/typedb-soak/M2/mode_3n_steady/node2/logs
+113397 /home/georgii/bin/typedb_server_bin --diagnostics.deployment-id=soak-mode_3n_chaos --server.listen-address=0.0.0.0:31729 --server.advertise-address=soak-m2:31729 --server.http.enabled=true --server.http.listen-address=0.0.0.0:31732 --server.http.advertise-address=http://soak-m2:31732 --server.admin.enabled=true --server.admin.socket-path=/tmp/tdb-soak-mode_3n_chaos-n2.sock --server.clustering.id=2 --server.clustering.address=soak-m2:31730 --storage.data-directory=/var/lib/typedb-soak/M2/mode_3n_chaos/node2/data --storage.clustering-directory=/var/lib/typedb-soak/M2/mode_3n_chaos/node2/clustering --diagnostics.monitoring.port=31731 --server.encryption.enabled=false --server.clustering.encryption.enabled=false --development-mode.enabled=true --logging.directory=/var/lib/typedb-soak/M2/mode_3n_chaos/node2/logs
+-- panic markers per mode --
+/var/lib/typedb-soak/M2/mode_3n_chaos/node2/server.log: 0 panics, 0 local-failure warns
+/var/lib/typedb-soak/M2/mode_3n_steady/node2/server.log: 0 panics, 0 local-failure warns
+-- disk --
+/dev/sdb         49G  542M   46G   2% /var/lib/typedb-soak
+
+===== soak-m3 =====
+-- typedb processes --
+92008 /home/georgii/bin/typedb_server_bin --diagnostics.deployment-id=soak-mode_3n_steady --server.listen-address=0.0.0.0:21729 --server.advertise-address=soak-m3:21729 --server.http.enabled=true --server.http.listen-address=0.0.0.0:21732 --server.http.advertise-address=http://soak-m3:21732 --server.admin.enabled=true --server.admin.socket-path=/tmp/tdb-soak-mode_3n_steady-n3.sock --server.clustering.id=3 --server.clustering.address=soak-m3:21730 --storage.data-directory=/var/lib/typedb-soak/M3/mode_3n_steady/node3/data --storage.clustering-directory=/var/lib/typedb-soak/M3/mode_3n_steady/node3/clustering --diagnostics.monitoring.port=21731 --server.encryption.enabled=false --server.clustering.encryption.enabled=false --development-mode.enabled=true --logging.directory=/var/lib/typedb-soak/M3/mode_3n_steady/node3/logs
+115172 /home/georgii/bin/typedb_server_bin --diagnostics.deployment-id=soak-mode_3n_chaos --server.listen-address=0.0.0.0:31729 --server.advertise-address=soak-m3:31729 --server.http.enabled=true --server.http.listen-address=0.0.0.0:31732 --server.http.advertise-address=http://soak-m3:31732 --server.admin.enabled=true --server.admin.socket-path=/tmp/tdb-soak-mode_3n_chaos-n3.sock --server.clustering.id=3 --server.clustering.address=soak-m3:31730 --storage.data-directory=/var/lib/typedb-soak/M3/mode_3n_chaos/node3/data --storage.clustering-directory=/var/lib/typedb-soak/M3/mode_3n_chaos/node3/clustering --diagnostics.monitoring.port=31731 --server.encryption.enabled=false --server.clustering.encryption.enabled=false --development-mode.enabled=true --logging.directory=/var/lib/typedb-soak/M3/mode_3n_chaos/node3/logs
+-- panic markers per mode --
+/var/lib/typedb-soak/M3/mode_3n_chaos/node3/server.log: 0 panics, 0 local-failure warns
+/var/lib/typedb-soak/M3/mode_3n_steady/node3/server.log: 0 panics, 0 local-failure warns
+-- disk --
+/dev/sdb         49G  544M   46G   2% /var/lib/typedb-soak

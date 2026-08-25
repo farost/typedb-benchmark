@@ -84,3 +84,24 @@ foreach_vm_parallel() {
     fi
     ok "$label — all ${#vms[@]} VMs succeeded"
 }
+
+# Remove leftover NET-CHAOS network impairments (iptables rules tagged
+# 'soak-net-chaos' + tc netem qdisc). NET-CHAOS restores these itself after each
+# "dirty" window, but a runner killed mid-window (e.g. by teardown) strands them,
+# blocking the chaos clustering port on the next deploy. Idempotent: only touches
+# tagged iptables rules and a netem qdisc; a no-op when there's nothing to clean.
+clean_net_chaos() {
+    local vm="$1"
+    gc_ssh "$vm" '
+        if sudo iptables-save 2>/dev/null | grep -q soak-net-chaos; then
+            sudo iptables-save | grep -v soak-net-chaos | sudo iptables-restore \
+                && echo "cleared leftover soak-net-chaos iptables rules"
+        fi
+        for IF in $(ls /sys/class/net 2>/dev/null | grep -vE "^lo$"); do
+            if tc qdisc show dev "$IF" 2>/dev/null | grep -qi netem; then
+                sudo tc qdisc del dev "$IF" root 2>/dev/null && echo "cleared netem qdisc on $IF"
+            fi
+        done
+        true
+    '
+}

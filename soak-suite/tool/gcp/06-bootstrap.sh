@@ -21,6 +21,13 @@ start_one() {
     " | tail -1
 }
 
+# Self-heal: clear any NET-CHAOS network impairments stranded by a prior run
+# (a runner killed mid-"dirty" leaves an iptables/tc rule that blocks the chaos
+# clustering port, wedging peer registration on this deploy).
+for M in "${SERVERS[@]}"; do
+    clean_net_chaos "$M" | sed "s/^/[$M] /" || true
+done
+
 for M in "${SERVERS[@]}"; do
     result="$(start_one "$M")"
     log "$M: $result"
