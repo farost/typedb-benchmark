@@ -88,58 +88,40 @@ benchmark:
 #     This is the "reproducible" path: works on a fresh GCP VM with just
 #     a $GITHUB_TOKEN.
 modes:
-  # ----- cluster-master (baseline, existing pin) -----
-  - name: cluster-master-1n
-    description: "typedb-cluster master, 1 node — single-replica overhead"
+  # ----- typedb core master (non-clustered baseline) -----
+  # The EXACT typedb rev that cluster @ 4310ba38 pins in its Cargo.lock
+  # (git = github.com/typedb/typedb, rev = 48bf48a8, advertised as PR #7926
+  # head) — so core-vs-cluster deltas are pure clustering overhead, not
+  # different core code. Branch: farost/enable-networkless-export-import
+  # (descends from typedb/typedb master tip df38617cc).
+  #
+  # NB: mode name must be exactly "typedb-core" — aggregate.py keys its
+  # baseline ratios ("vs core") on that literal name.
+  - name: typedb-core
+    description: "typedb master + networkless-export-import @ 48bf48a8, 1 node — non-clustered baseline"
+    repo_url:    "git@github.com:farost/typedb.git"
+    commit:      "48bf48a810c44e52923d86ba948f640eb0c68537"  # Cleanups and fix build (2026-08-25)
+    local_archive: ""
+    local_repo:    ""
+    server_type: typedb
+    nodes:       1
+
+  # ----- typedb-cluster release candidate @ 4310ba38 -----
+  # Branch: farost/clustered-import-auto-upgrade (strictly ahead of
+  # farost/master by 47 commits; the pre-final-release state).
+  - name: cluster-rc-1n
+    description: "typedb-cluster release candidate @ 4310ba38, 1 node — single-replica overhead"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "b3338c31b6efd31b8b99656c61fb64f069ba8fd3"  # typedb-cluster master @ Update typedb version
+    commit:      "4310ba387c76c202a2b94d5fe5194c1afaadb4b2"  # Another windows fix (2026-08-25)
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
     nodes:       1
 
-  - name: cluster-master-3n
-    description: "typedb-cluster master, 3 nodes — full cluster on master baseline"
+  - name: cluster-rc-3n
+    description: "typedb-cluster release candidate @ 4310ba38, 3 nodes — full cluster"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "b3338c31b6efd31b8b99656c61fb64f069ba8fd3"  # same as cluster-master-1n
-    local_archive: ""
-    local_repo:    ""
-    server_type: typedb-cluster
-    nodes:       3
-
-  # ----- cluster-support-feature-branch @ ec08de67 (the "before" for the last optimization) -----
-  - name: cluster-feature-ec08de67-1n
-    description: "cluster-support-feature-branch @ ec08de67, 1 node — pre-latest, the 'before' for the last optimization"
-    repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "ec08de6753df201322e6ec73d7377a231a06301d"  # Stabilize node statuses and optimize apply path (#714) — pre-latest, the "before" for the last optimization
-    local_archive: ""
-    local_repo:    ""
-    server_type: typedb-cluster
-    nodes:       1
-
-  - name: cluster-feature-ec08de67-3n
-    description: "cluster-support-feature-branch @ ec08de67, 3 nodes — pre-latest, the 'before' for the last optimization"
-    repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "ec08de6753df201322e6ec73d7377a231a06301d"  # same as cluster-feature-ec08de67-1n
-    local_archive: ""
-    local_repo:    ""
-    server_type: typedb-cluster
-    nodes:       3
-
-  # ----- cluster-support-feature-branch @ ec08de67 (latest, WITH the optimization) -----
-  - name: cluster-feature-2b607ca0-1n
-    description: "cluster-support-feature-branch @ ec08de67, 1 node — with new optimization"
-    repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "2b607ca0a953f976d178ce24055630db17981787"  # Update lock file after rebase — latest, WITH the "optimize apply path" change (post-rebase)
-    local_archive: ""
-    local_repo:    ""
-    server_type: typedb-cluster
-    nodes:       1
-
-  - name: cluster-feature-2b607ca0-3n
-    description: "cluster-support-feature-branch @ ec08de67, 3 nodes — with new optimization"
-    repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "2b607ca0a953f976d178ce24055630db17981787"  # same as cluster-feature-2b607ca0-1n
+    commit:      "4310ba387c76c202a2b94d5fe5194c1afaadb4b2"  # same as cluster-rc-1n
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster

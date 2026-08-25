@@ -23,9 +23,20 @@ if [ ! -d ~/typedb-cluster/.git ]; then
     git clone --quiet https://__USER__:__TOKEN__@github.com/${TYPEDB_REPO}.git ~/typedb-cluster
 fi
 cd ~/typedb-cluster
+# A cached clone keeps the URL it was cloned with — repoint it so a
+# TYPEDB_REPO override (e.g. building a fork-only SHA) and a fresh token
+# actually take effect instead of silently fetching the old remote.
+git remote set-url origin https://__USER__:__TOKEN__@github.com/${TYPEDB_REPO}.git
 git fetch --tags --quiet origin '$TYPEDB_TAG' 2>/dev/null || git fetch --tags --quiet origin
 git checkout --quiet '$TYPEDB_TAG'
 actual=\$(git rev-parse HEAD)
+expected='$TYPEDB_TAG'
+case \"\$expected\" in
+    *[!0-9a-f]*) : ;;   # tag name, not a sha — checkout already validated it
+    *) if [ \${#expected} -eq 40 ] && [ \"\$actual\" != \"\$expected\" ]; then
+           echo \"HEAD=\$actual but expected \$expected — refusing to build\"; exit 1
+       fi ;;
+esac
 mkdir -p ~/bin
 marker=~/bin/.typedb-built-from
 if [ -f \"\$marker\" ] && [ \"\$(cat \"\$marker\")\" = \"\$actual\" ] && [ -x ~/bin/typedb_server_bin ] && [ -x ~/bin/typedb_admin_bin ]; then
