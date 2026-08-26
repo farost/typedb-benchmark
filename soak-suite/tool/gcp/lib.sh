@@ -24,6 +24,11 @@ require_env() {
 : "${SUBNET:=default}"
 : "${TYPEDB_TAG:=3.12.0-beta-1}"
 : "${SIZING:=verification}"   # verification | long-soak
+# Must track the `versions = [...]` pin in typedb / typedb-cluster MODULE.bazel:
+# the cargo build here has no rust-toolchain.toml to follow, so an older rustup
+# default silently diverges from what bazel/CI compile with, and rejects library
+# features that are stable in the pinned release (e.g. std::iter::chain).
+: "${RUST_VERSION:=1.93.0}"
 
 # ---------- Machine names ----------
 SERVERS=(soak-m1 soak-m2 soak-m3)

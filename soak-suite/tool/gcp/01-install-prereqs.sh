@@ -19,8 +19,14 @@ server_prereqs() {
         sudo apt-get update -qq
         sudo apt-get install -y -qq build-essential pkg-config libssl-dev iptables iproute2 tmux jq git curl python3 python3-pip libclang-dev clang protobuf-compiler
         if [ ! -f \$HOME/.cargo/env ]; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.90.0 --profile minimal >/dev/null
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $RUST_VERSION --profile minimal >/dev/null
         fi
+        . \$HOME/.cargo/env
+        # Pin the toolchain on every run, not just first provisioning: the guard
+        # above is a no-op once rustup exists, so a fleet created with an older
+        # default would keep building with a stale rustc forever.
+        rustup toolchain install $RUST_VERSION --profile minimal >/dev/null 2>&1
+        rustup default $RUST_VERSION >/dev/null
         $mount_hook
         sudo mkdir -p /var/lib/typedb-soak
         sudo chown \$USER /var/lib/typedb-soak
@@ -30,7 +36,7 @@ server_prereqs() {
         fi
         sudo -n iptables -L OUTPUT -n >/dev/null
         IFACE_=\$(ip -o -4 route show default | awk '{print \$5}' | head -1); sudo -n tc qdisc show dev \$IFACE_ >/dev/null
-        echo PREFLIGHT_OK
+        echo PREFLIGHT_OK rustc=\$(rustc --version | awk '{print \$2}')
     " | tail -3
 }
 
@@ -41,11 +47,17 @@ client_prereqs() {
         sudo apt-get update -qq
         sudo apt-get install -y -qq build-essential pkg-config libssl-dev tmux jq git curl python3 python3-pip libclang-dev clang protobuf-compiler
         if [ ! -f \$HOME/.cargo/env ]; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.90.0 --profile minimal >/dev/null
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $RUST_VERSION --profile minimal >/dev/null
         fi
+        . \$HOME/.cargo/env
+        # Pin the toolchain on every run, not just first provisioning: the guard
+        # above is a no-op once rustup exists, so a fleet created with an older
+        # default would keep building with a stale rustc forever.
+        rustup toolchain install $RUST_VERSION --profile minimal >/dev/null 2>&1
+        rustup default $RUST_VERSION >/dev/null
         sudo mkdir -p /var/lib/typedb-soak
         sudo chown \$USER /var/lib/typedb-soak
-        echo CLIENT_PREFLIGHT_OK
+        echo CLIENT_PREFLIGHT_OK rustc=\$(rustc --version | awk '{print \$2}')
     " | tail -1
 }
 
