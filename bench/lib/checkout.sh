@@ -30,6 +30,13 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
     esac
 fi
 
+# Strip any `user:token@` credential out of a string before it is logged. The
+# rewrite above embeds a PAT in $repo_url, and git echoes the remote URL back in
+# its own error text, so both must pass through here — a token printed to a
+# terminal or a tee'd log file has to be treated as disclosed and rotated.
+redact() { printf '%s' "$*" | sed -E 's#://[^@/[:space:]]*@#://***:***@#g'; }
+safe_url="$(redact "$repo_url")"
+
 mkdir -p "$(dirname "$dest")"
 
 if [ -d "$dest/.git" ]; then
@@ -43,7 +50,7 @@ if [ -d "$dest/.git" ]; then
     # Surface remote-url-set failures (mismatched remote, perms drift, etc.)
     # rather than silently leaving origin pointing at a stale URL.
     if ! err="$(git -C "$dest" remote set-url origin "$repo_url" 2>&1)"; then
-        error "could not set origin URL on $dest: $err"
+        error "could not set origin URL on $dest: $(redact "$err")"
         exit 1
     fi
     # Try the cheap single-commit fetch first. If it fails (e.g. remote
@@ -52,12 +59,12 @@ if [ -d "$dest/.git" ]; then
     # fallback, no swallowed stderr (this is the bug that hid GITHUB_TOKEN
     # loss between sessions).
     if ! commit_fetch_err="$(git -C "$dest" fetch origin "$commit" 2>&1)"; then
-        log "  single-commit fetch failed: $commit_fetch_err"
+        log "  single-commit fetch failed: $(redact "$commit_fetch_err")"
         log "  retrying with default fetch"
         if ! full_fetch_err="$(git -C "$dest" fetch origin 2>&1)"; then
             error "fetch from origin failed for $dest"
-            error "  single-commit error: $commit_fetch_err"
-            error "  full-fetch error:    $full_fetch_err"
+            error "  single-commit error: $(redact "$commit_fetch_err")"
+            error "  full-fetch error:    $(redact "$full_fetch_err")"
             error "  likely missing GITHUB_TOKEN (env) or auth/network problem"
             exit 1
         fi
@@ -66,19 +73,32 @@ if [ -d "$dest/.git" ]; then
     # tree on every checkout, so a reused checkout is always dirty. Discard
     # that edit (it is re-applied for the new commit right after).
     if ! co_err="$(git -C "$dest" checkout --quiet --force "$commit" 2>&1)"; then
-        error "could not checkout $commit in $dest: $co_err"
+        error "could not checkout $commit in $dest: $(redact "$co_err")"
         error "  commit may not exist on the remote, or fetch was incomplete"
         exit 1
     fi
 else
-    log "Cloning $repo_url -> $dest"
+    log "Cloning $safe_url -> $dest"
     if ! clone_err="$(git clone --quiet "$repo_url" "$dest" 2>&1)"; then
-        error "clone of $repo_url to $dest failed: $clone_err"
+        error "clone of $safe_url to $dest failed: $(redact "$clone_err")"
         error "  likely missing GITHUB_TOKEN (env) or auth/network problem"
         exit 1
     fi
+    # A clone only carries commits reachable from a branch, so a pin whose branch
+    # was deleted (or that only ever lived on a PR ref) is absent and checkout
+    # fails with "reference is not a tree". Fetch the object explicitly — GitHub
+    # serves any SHA in the fork network. The reuse path below always fetches, so
+    # this gap only shows up on a from-scratch clone.
+    if ! git -C "$dest" cat-file -e "${commit}^{commit}" 2>/dev/null; then
+        log "  $commit not reachable from any branch in the clone; fetching the object directly"
+        if ! sha_fetch_err="$(git -C "$dest" fetch origin "$commit" 2>&1)"; then
+            error "could not fetch $commit from $safe_url: $(redact "$sha_fetch_err")"
+            error "  the commit may have been garbage-collected, or the pin is wrong"
+            exit 1
+        fi
+    fi
     if ! co_err="$(git -C "$dest" checkout --quiet "$commit" 2>&1)"; then
-        error "could not checkout $commit after clone: $co_err"
+        error "could not checkout $commit after clone: $(redact "$co_err")"
         exit 1
     fi
 fi
