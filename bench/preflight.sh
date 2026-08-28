@@ -122,10 +122,13 @@ probe_binary() {
             "--storage.clustering-directory=$dir/clustering"
             --server.clustering.encryption.enabled=false
         )
-        # Allow the single-node probe to bootstrap when the binary is on
-        # a build that requires the new init flag (cluster-feature-branch
-        # 19bb35d9+). Older builds don't have it — guard with has_flag.
-        if has_flag server.clustering.init; then
+        # Allow the single-node probe to bootstrap. Same three-way flag history
+        # as start-server.sh: absent, `--server.clustering.init` (19bb35d9+),
+        # then `--initialize.create-cluster` (83b14bc6+). Probe the newest name
+        # first so a renamed build doesn't silently get no bootstrap flag.
+        if has_flag initialize.create-cluster; then
+            args+=(--initialize.create-cluster=true)
+        elif has_flag server.clustering.init; then
             args+=(--server.clustering.init=true)
         fi
     fi

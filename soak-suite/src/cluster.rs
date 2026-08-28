@@ -7,7 +7,7 @@ use std::{
     net::TcpStream,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
     thread,
     time::{Duration, Instant},
 };
@@ -130,10 +130,37 @@ impl Node {
         // typedb-cluster/cluster_server/parameters/cli.rs) — it acts only
         // when the storage directory is in a pre-bootstrap state.
         if id == 1 {
-            args.push("--server.clustering.init=true".to_string());
+            args.push(format!("{}=true", bootstrap_flag(&self.binaries.server_bin)));
         }
         args
     }
+}
+
+/// The bootstrap flag was renamed in typedb-cluster 83b14bc6:
+/// `--server.clustering.init` became `--initialize.create-cluster`. Probe the
+/// binary's own `--help` once and use whichever spelling it accepts, so one
+/// harness can soak builds from either side of the rename instead of dying at
+/// startup on an unknown argument. Falls back to the older name, which is also
+/// what a failed probe implies — a binary we cannot even run will fail loudly a
+/// moment later anyway.
+fn bootstrap_flag(server_bin: &Path) -> &'static str {
+    static FLAG: OnceLock<&'static str> = OnceLock::new();
+    FLAG.get_or_init(|| {
+        let help = Command::new(server_bin)
+            .arg("--help")
+            .output()
+            .map(|out| {
+                let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
+                text.push_str(&String::from_utf8_lossy(&out.stderr));
+                text
+            })
+            .unwrap_or_default();
+        if help.contains("initialize.create-cluster") {
+            "--initialize.create-cluster"
+        } else {
+            "--server.clustering.init"
+        }
+    })
 }
 
 pub fn build_nodes_for_machine(

@@ -125,14 +125,20 @@ start_node() {
             "--storage.clustering-directory=${clustering_dir}"
             --server.clustering.encryption.enabled=false
         )
-        # Newer cluster-feature-branch (typedb-cluster 19bb35d9+) requires
-        # `--server.clustering.init=true` on node 1 to allow initial cluster
-        # bootstrap. The flag is idempotent on subsequent boots (acts only
-        # when the storage dir is pre-bootstrap) but only pass it on node 1
-        # per its docstring. Older builds don't have the flag — guard with
-        # has_flag so we don't break them.
-        if [ "$n" = "1" ] && has_flag server.clustering.init; then
-            args+=( --server.clustering.init=true )
+        # Node 1 bootstraps the cluster on first boot. The flag is idempotent on
+        # subsequent boots (acts only when the storage dir is pre-bootstrap) but
+        # per its docstring only node 1 gets it. The name has changed twice:
+        # absent on old builds, `--server.clustering.init` from typedb-cluster
+        # 19bb35d9+, and `--initialize.create-cluster` from 83b14bc6. Probe for
+        # the new spelling FIRST — checking only the old one on a renamed build
+        # silently passes no bootstrap flag at all, and the cluster then never
+        # elects a primary, which surfaces far away as a readiness timeout.
+        if [ "$n" = "1" ]; then
+            if has_flag initialize.create-cluster; then
+                args+=( --initialize.create-cluster=true )
+            elif has_flag server.clustering.init; then
+                args+=( --server.clustering.init=true )
+            fi
         fi
     fi
 
