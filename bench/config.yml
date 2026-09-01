@@ -88,40 +88,37 @@ benchmark:
 #     This is the "reproducible" path: works on a fresh GCP VM with just
 #     a $GITHUB_TOKEN.
 modes:
-  # ----- typedb core master (non-clustered baseline) -----
-  # The EXACT typedb rev that cluster @ 4310ba38 pins in its Cargo.lock
-  # (git = github.com/typedb/typedb, rev = 48bf48a8, advertised as PR #7926
-  # head) — so core-vs-cluster deltas are pure clustering overhead, not
-  # different core code. Branch: farost/enable-networkless-export-import
-  # (descends from typedb/typedb master tip df38617cc).
-  #
-  # NB: mode name must be exactly "typedb-core" — aggregate.py keys its
-  # baseline ratios ("vs core") on that literal name.
-  - name: typedb-core
-    description: "typedb master + networkless-export-import @ 48bf48a8, 1 node — non-clustered baseline"
-    repo_url:    "git@github.com:farost/typedb.git"
-    commit:      "48bf48a810c44e52923d86ba948f640eb0c68537"  # Cleanups and fix build (2026-08-25)
-    local_archive: ""
-    local_repo:    ""
-    server_type: typedb
-    nodes:       1
-
-  # ----- typedb-cluster release candidate @ 4310ba38 -----
-  # Branch: farost/clustered-import-auto-upgrade (strictly ahead of
-  # farost/master by 47 commits; the pre-final-release state).
-  - name: cluster-rc-1n
-    description: "typedb-cluster release candidate @ 4310ba38, 1 node — single-replica overhead"
+  # ----- typedb-cluster master (baseline) -----
+  # Single node only: master's cluster_server exposes no clustering flags
+  # (its whole CLI surface is --diagnostics.deployment-id), which is why
+  # there is no cluster-master-3n counterpart. start-server.sh introspects
+  # via has_flag, so it simply omits the clustering args for this mode.
+  - name: cluster-master-1n
+    description: "typedb-cluster master, 1 node — pre-clustering baseline"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "4310ba387c76c202a2b94d5fe5194c1afaadb4b2"  # Another windows fix (2026-08-25)
+    commit:      "e7fb3d5d2ccfc79cb34638d75eef8d836a0be898"  # Disable implicit init py file creation for bazel python targets (#723), 2026-09-01
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
     nodes:       1
 
-  - name: cluster-rc-3n
-    description: "typedb-cluster release candidate @ 4310ba38, 3 nodes — full cluster"
+  # ----- 3.12.0-beta-5 -----
+  # Tag 3.12.0-beta-5 resolves to c928e8dc ("Resolve conflicts after rebase,
+  # prepare beta-5"). Pinned as a SHA because checkout.sh asserts HEAD equality
+  # and a tag name fails that assertion.
+  - name: cluster-beta5-1n
+    description: "typedb-cluster 3.12.0-beta-5, 1 node — single-replica overhead"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "4310ba387c76c202a2b94d5fe5194c1afaadb4b2"  # same as cluster-rc-1n
+    commit:      "c928e8dcab80d271fb16545604aed506145ff297"
+    local_archive: ""
+    local_repo:    ""
+    server_type: typedb-cluster
+    nodes:       1
+
+  - name: cluster-beta5-3n
+    description: "typedb-cluster 3.12.0-beta-5, 3 nodes — full cluster"
+    repo_url:    "git@github.com:farost/typedb-cluster.git"
+    commit:      "c928e8dcab80d271fb16545604aed506145ff297"
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
