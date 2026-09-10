@@ -89,36 +89,32 @@ benchmark:
 #     a $GITHUB_TOKEN.
 modes:
   # ----- typedb-cluster master (baseline) -----
-  # Single node only: master's cluster_server exposes no clustering flags
-  # (its whole CLI surface is --diagnostics.deployment-id), which is why
-  # there is no cluster-master-3n counterpart. start-server.sh introspects
-  # via has_flag, so it simply omits the clustering args for this mode.
+  # Single node only: master's cluster_server exposes no clustering flags.
   - name: cluster-master-1n
     description: "typedb-cluster master, 1 node — pre-clustering baseline"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "e7fb3d5d2ccfc79cb34638d75eef8d836a0be898"  # Disable implicit init py file creation for bazel python targets (#723), 2026-09-01
+    commit:      "4e2fd7b5612d99d395d3b867952ae0ea66f8565f"  # Update dependencies, 2026-09-09
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
     nodes:       1
 
-  # ----- 3.12.0-beta-5 -----
-  # Tag 3.12.0-beta-5 resolves to c928e8dc ("Resolve conflicts after rebase,
-  # prepare beta-5"). Pinned as a SHA because checkout.sh asserts HEAD equality
-  # and a tag name fails that assertion.
-  - name: cluster-beta5-1n
-    description: "typedb-cluster 3.12.0-beta-5, 1 node — single-replica overhead"
+  # ----- 3.14.0-rc0 -----
+  # Tag 3.14.0-rc0 -> 7f3d2999 ("Update version to 3.14.0-rc0", 2026-09-10).
+  # Pinned as a SHA: checkout.sh asserts HEAD equality and a tag name fails that.
+  - name: cluster-rc0-1n
+    description: "typedb-cluster 3.14.0-rc0, 1 node — single-replica overhead"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "c928e8dcab80d271fb16545604aed506145ff297"
+    commit:      "7f3d29994aed5ce47893095a4291e9202d4b4ffe"
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
     nodes:       1
 
-  - name: cluster-beta5-3n
-    description: "typedb-cluster 3.12.0-beta-5, 3 nodes — full cluster"
+  - name: cluster-rc0-3n
+    description: "typedb-cluster 3.14.0-rc0, 3 nodes — full cluster"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "c928e8dcab80d271fb16545604aed506145ff297"
+    commit:      "7f3d29994aed5ce47893095a4291e9202d4b4ffe"
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
