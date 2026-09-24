@@ -89,32 +89,54 @@ benchmark:
 #     a $GITHUB_TOKEN.
 modes:
   # ----- typedb-cluster master (baseline) -----
-  # Single node only: master's cluster_server exposes no clustering flags.
+  # Single node only: master's cluster_server exposes no clustering flags
+  # (36 files, no raft/clustering sources), so it cannot form a 3-node cluster.
   - name: cluster-master-1n
-    description: "typedb-cluster master, 1 node — pre-clustering baseline"
+    description: "typedb-cluster master 3.13.6, 1 node — pre-clustering baseline"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "4e2fd7b5612d99d395d3b867952ae0ea66f8565f"  # Update dependencies, 2026-09-09
+    commit:      "130b005459c1574bf7e623f7362a6d56f6b2352d"  # Update version to 3.13.6, 2026-09-22
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
     nodes:       1
 
-  # ----- 3.14.0-rc0 -----
-  # Tag 3.14.0-rc0 -> 7f3d2999 ("Update version to 3.14.0-rc0", 2026-09-10).
-  # Pinned as a SHA: checkout.sh asserts HEAD equality and a tag name fails that.
-  - name: cluster-rc0-1n
-    description: "typedb-cluster 3.14.0-rc0, 1 node — single-replica overhead"
+  # ----- feature branch BEFORE memory backpressure -----
+  # 3a57c53b ("Update cargo files after rebase") is the parent of the 5-commit
+  # run that introduces backpressure. Pairing it with f3c9453d isolates
+  # fbfae9ad ("Introduce memory backpressure"); the other 4 commits in between
+  # are tests, renames and formatting.
+  - name: cluster-prebackpressure-1n
+    description: "feature branch without memory backpressure, 1 node"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "7f3d29994aed5ce47893095a4291e9202d4b4ffe"
+    commit:      "3a57c53b636600b4430505c65e9fcbdd9f20121c"
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
     nodes:       1
 
-  - name: cluster-rc0-3n
-    description: "typedb-cluster 3.14.0-rc0, 3 nodes — full cluster"
+  - name: cluster-prebackpressure-3n
+    description: "feature branch without memory backpressure, 3 nodes"
     repo_url:    "git@github.com:farost/typedb-cluster.git"
-    commit:      "7f3d29994aed5ce47893095a4291e9202d4b4ffe"
+    commit:      "3a57c53b636600b4430505c65e9fcbdd9f20121c"
+    local_archive: ""
+    local_repo:    ""
+    server_type: typedb-cluster
+    nodes:       3
+
+  # ----- feature branch WITH memory backpressure -----
+  - name: cluster-backpressure-1n
+    description: "feature branch with memory backpressure, 1 node"
+    repo_url:    "git@github.com:farost/typedb-cluster.git"
+    commit:      "f3c9453dd9588c7aa452c3091d83682e95c09341"  # Generalise tests, 2026-09-24
+    local_archive: ""
+    local_repo:    ""
+    server_type: typedb-cluster
+    nodes:       1
+
+  - name: cluster-backpressure-3n
+    description: "feature branch with memory backpressure, 3 nodes"
+    repo_url:    "git@github.com:farost/typedb-cluster.git"
+    commit:      "f3c9453dd9588c7aa452c3091d83682e95c09341"
     local_archive: ""
     local_repo:    ""
     server_type: typedb-cluster
